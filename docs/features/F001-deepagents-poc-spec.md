@@ -42,7 +42,7 @@ created: 2026-05-26
 
 ## Acceptance Criteria
 
-1. [ ] Part 1: 6 个核心示例 + 3 个扩展示例已对齐官方 API；语法/静态测试通过，真实模型运行待本地 Ollama 实例验证
+1. [x] Part 1: 6 个核心示例 + 3 个扩展示例已对齐官方 API；语法/静态测试通过；9/9 示例已在 MiniMax OpenAI-compatible 运行环境完成真实模型验证
 2. [x] Part 1: Java 开发者可独立阅读前置知识指南后理解示例
 3. [x] Part 2: 可接受一份 Word 文档并自动提取问题
 4. [x] Part 2: 问题意图分类准确（定义/税率/合规）
@@ -77,8 +77,8 @@ Word Document (.docx)
 | Layer | Choice |
 |-------|--------|
 | Framework | deepagents ≥ 0.6.3 |
-| LLM | Ollama (local) |
-| Ollama provider | langchain-ollama |
+| LLM | Configurable via `DEEPAGENTS_MODEL`; MiniMax OpenAI-compatible runtime validated, Ollama local runtime remains supported |
+| Providers | OpenAI-compatible (`langchain-openai`) + Ollama (`langchain-ollama`) |
 | File parsing | python-docx |
 | Output | Markdown + JSON |
 | Runtime | Python ≥ 3.11 |
@@ -93,15 +93,17 @@ Word Document (.docx)
 | P0 | citation 结构化正则抽取（`[来源:]/[依据:]/[参考:]` 格式） | `02702ea` |
 | P0 | agent_executor 可注入测试路径 + mock 覆盖 | `02702ea` |
 | P0 | build_agent 改为 @staticmethod 归入 AgentExecutor | `02702ea` |
-| P1 | Part 1 示例模型配置化（`DEEPAGENTS_MODEL` 环境变量，默认 `ollama:llama3.1`） | `a958a38` |
+| P1 | Part 1 示例模型配置化（`DEEPAGENTS_MODEL` 环境变量） | `a958a38` |
 | P1 | deepagents 0.6.3 安装，测试 28 passed | `a958a38` |
 | P1 | Part 1 示例 API 偏差修正（HITL `confirmation_before`→`interrupt_on`，但仍需补全官方 interrupt/resume 链路） | `0f4b297` |
 | P1 | Part 2 `agent_executor` API 偏差修正（`init_chat_model` 设置温度/令牌、返回值 defensive accessor） | `0f4b297` |
-| P1 | Part 1 官方 API 对齐：自定义 subagents、长期 memory、完整 HITL、streaming、event streaming、permissions | `current change` |
+| P1 | Part 1 官方 API 对齐：自定义 subagents、长期 memory、完整 HITL、streaming、event streaming、permissions | `8e685e0`, `21cc93c` |
+| P1 | MiniMax OpenAI-compatible 运行环境适配：显式 dotenv、provider profile、消息访问兼容、Windows UTF-8 运行约束 | `bdd7575` |
+| P1 | DeepAgents memory backend deprecation 清理：移除 `runtime` 参数和 callable backend factory | `db482b9` |
 
 ## Open Questions (回滚成本低的猫猫自决)
 
-- 本地模型具体选型（Ollama 拉取的模型名）
+- 若最终交付目标仍要求“本地模型”，需补跑 Ollama/vLLM 路径；当前真实运行证据来自 MiniMax OpenAI-compatible runtime
 - deepagents `create_deep_agent` vs `DeepAgent` class 的选择
 - 意图分类：prompt-based vs 独立 classifier
 - `.pytest_tmp` 目录 Windows 权限清理问题（.gitignore 已排除，不影响运行）
