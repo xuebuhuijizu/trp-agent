@@ -5,6 +5,7 @@ description = "Deep Agents POC - Tax QA Agent"
 requires-python = ">=3.11"
 dependencies = [
     "deepagents>=0.6.3",
+    "langchain-ollama>=1.0",
     "python-docx>=1.1.2",
     "pydantic>=2.0",
 ]

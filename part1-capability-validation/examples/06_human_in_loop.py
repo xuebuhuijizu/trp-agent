@@ -9,14 +9,21 @@ Deep Agents 能力验证 — 6. Human-in-the-Loop
 
 import os
 from deepagents import create_deep_agent
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import Command
+
+
+checkpointer = MemorySaver()
 
 agent = create_deep_agent(
     model=os.getenv("DEEPAGENTS_MODEL", "ollama:llama3.1"),
     system_prompt="你是一个税务助手。对于可能影响重大的操作，先请求用户确认。",
     # 启用 HITL：写/编辑文件前暂停等待用户确认
     interrupt_on={"write_file": True, "edit_file": True},
+    checkpointer=checkpointer,
 )
 
+config = {"configurable": {"thread_id": "tax-hitl-demo"}}
 result = agent.invoke({
     "messages": [
         {
@@ -27,18 +34,35 @@ result = agent.invoke({
             ),
         }
     ]
-})
+}, config=config, version="v2")
 
-print(result["messages"][-1]["content"])
+if result.interrupts:
+    interrupt_value = result.interrupts[0].value
+    action_requests = interrupt_value["action_requests"]
+    print("需要人工确认以下工具调用：")
+    for action in action_requests:
+        print(f"- {action['name']}: {action.get('args', {})}")
+
+    approved = input("批准执行这些工具调用吗？输入 y 批准，其它输入拒绝：").strip().lower() == "y"
+    decisions = [{"type": "approve" if approved else "reject"} for _ in action_requests]
+    result = agent.invoke(
+        Command(resume={"decisions": decisions}),
+        config=config,
+        version="v2",
+    )
+
+messages = result.value["messages"] if hasattr(result, "value") else result["messages"]
+print(messages[-1]["content"])
 """
 预期行为：
 - agent 进行分析后准备写入文件
-- 系统暂停执行，等待用户确认 write_file 操作
-- 用户确认后文件写入完成
+- interrupt_on 捕获 write_file/edit_file 工具调用
+- checkpointer 保存暂停状态，同一个 thread_id 用 Command(resume=...) 恢复
+- 用户批准后文件写入，拒绝后 agent 调整回答
 
-真实能力来源：deepagents 的 confirmation_before 配置 + HITL middleware
+真实能力来源：deepagents 原生 interrupt_on + checkpointer + LangGraph Command(resume=...)
 
 运行说明：
 - 交互式环境下会暂停等待输入
-- 非交互环境下可能自动跳过确认
+- 非交互环境建议只阅读代码，不直接运行
 """

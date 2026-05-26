@@ -12,9 +12,27 @@ from deepagents import create_deep_agent
 
 agent = create_deep_agent(
     model=os.getenv("DEEPAGENTS_MODEL", "ollama:llama3.1"),
+    subagents=[
+        {
+            "name": "tax-policy-researcher",
+            "description": "Researches tax policy definitions, compliance rules, and legal context.",
+            "system_prompt": (
+                "你是税务政策研究子 Agent。只处理法规、定义、合规判断相关问题，"
+                "输出要简洁列出依据和不确定性。"
+            ),
+        },
+        {
+            "name": "tax-calculation-reviewer",
+            "description": "Reviews tax-rate and calculation questions for arithmetic and assumptions.",
+            "system_prompt": (
+                "你是税务计算复核子 Agent。只处理税率、税额、计算口径相关问题，"
+                "输出计算步骤、假设和复核结论。"
+            ),
+        },
+    ],
     system_prompt=(
         "你是一个研究助手。对于需要深入研究的子问题，"
-        "使用 task 工具创建子 Agent 来处理，"
+        "使用 task 工具委托给 tax-policy-researcher 或 tax-calculation-reviewer，"
         "然后汇总子 Agent 的结果。"
     ),
 )
@@ -26,7 +44,7 @@ result = agent.invoke({
             "content": (
                 "请同时研究两个问题，分别交给子 Agent 处理：\n"
                 "1. 什么是增值税？\n"
-                "2. 增值税和企业所得税的区别是什么？\n"
+                "2. 年收入 500 万的企业，企业所得税如何估算？\n"
                 "然后汇总两个子 Agent 的发现。"
             ),
         }
@@ -36,9 +54,10 @@ result = agent.invoke({
 print(result["messages"][-1]["content"])
 """
 预期行为：
-- agent 会调用 task 工具创建子 agent
-- 子 agent 分别研究各自的问题
+- agent 会调用 task 工具委托给自定义 subagents
+- tax-policy-researcher 研究税务定义/法规问题
+- tax-calculation-reviewer 复核税率/计算问题
 - 主 agent 汇总两个子 agent 的结果
 
-真实能力来源：deepagents 内置的 task tool + sub-agent middleware
+真实能力来源：deepagents 原生 task tool + subagents=[...] 自定义子 Agent 配置
 """

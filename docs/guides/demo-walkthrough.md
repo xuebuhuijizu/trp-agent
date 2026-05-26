@@ -37,7 +37,7 @@ python -m venv .venv
 # source .venv/bin/activate  # Mac/Linux
 
 # 3. 安装依赖
-pip install deepagents pydantic
+pip install deepagents langchain-ollama pydantic
 pip install python-docx    # 仅当演示 .docx 输入时
 ```
 
@@ -50,9 +50,9 @@ python -c "from pydantic import BaseModel; print('pydantic OK')"
 
 ---
 
-## Part 1：Deep Agents 能力验证（6 个示例）
+## Part 1：Deep Agents 能力验证（6 个核心示例 + 3 个扩展示例）
 
-每个示例是一个独立的 Python 脚本，演示 Deep Agents 的一项原生能力。
+每个示例是一个独立的 Python 脚本，演示 Deep Agents 的一项原生能力。示例 1-6 对应原始 POC 范围，示例 7-9 补充官方文档中同属核心路径的流式输出、事件流和权限控制。
 
 > **演示技巧**：逐个运行，每运行一个先问观众"猜猜 agent 会调用哪些工具？"，然后运行验证。
 
@@ -78,16 +78,16 @@ python 01_file_tools.py
 
 ### 示例 2：Sub-agent
 
-**演示目标**：展示主 Agent 孵化子 Agent 处理独立子任务
+**演示目标**：展示主 Agent 使用自定义 subagents 处理独立子任务
 
 ```bash
 python 02_sub_agent.py
 ```
 
 **预期行为**：
-1. Agent 识别两个需要独立研究的子问题
-2. 创建两个子 Agent，各自获得隔离上下文
-3. 子 Agent 分别完成研究后返回结果
+1. Agent 识别两个需要独立处理的子问题
+2. 通过 `subagents=[...]` 定义的 `tax-policy-researcher` / `tax-calculation-reviewer` 执行委托
+3. 子 Agent 在隔离上下文中完成研究或计算复核
 4. 主 Agent 汇总两个子 Agent 的发现
 
 **证据**：输出中能看到两次独立的子任务调用，最终是汇总后的完整回答
@@ -114,19 +114,19 @@ python 03_planning.py
 
 ### 示例 4：Memory
 
-**演示目标**：展示跨会话的持久化记忆
+**演示目标**：展示 `memory=[...]` + backend/store 的长期记忆
 
 ```bash
 python 04_memory.py
 ```
 
 **预期行为**：
-1. 第一轮：用户说"年收入 500 万的软件公司"
-2. Agent 存储该信息到持久化记忆
-3. 第二轮：用户问"适合小微企业优惠吗"
-4. Agent 从记忆中检索公司信息，结合上下文回答
+1. 示例先在 `InMemoryStore` 中写入 `/memories/AGENTS.md`
+2. Agent 通过 `memory=["/memories/AGENTS.md"]` 加载长期记忆
+3. 两个不同 `thread_id` 的调用共享同一 memory backend
+4. Agent 回答时引用记忆中的回答偏好与税务背景
 
-**证据**：第二轮回答中引用了第一轮提到的公司规模和行业
+**证据**：不同 thread 的回答仍体现 `/memories/AGENTS.md` 中的长期记忆内容
 
 ---
 
@@ -158,13 +158,64 @@ python 06_human_in_loop.py
 
 **预期行为**：
 1. Agent 分析税务情况后决定写入文件
-2. 触发 `confirmation_before` 机制，暂停等待确认
-3. 用户输入 y/yes 确认
-4. 文件写入完成
+2. 触发 `interrupt_on` 机制，返回 interrupt
+3. 同一 `thread_id` 使用 `Command(resume=...)` 恢复
+4. 用户批准后文件写入，拒绝后 Agent 调整回答
 
-**证据**：控制台显示确认提示，用户确认后文件写入
+**证据**：控制台显示 action_requests，用户确认后通过 resume 继续执行
 
-> **注意**：非交互环境可能自动跳过确认。建议在终端直接运行以体验完整流程。
+> **注意**：HITL 示例依赖交互式终端；非交互环境建议只阅读代码或用 mock 验证 API 形状。
+
+---
+
+### 示例 7：Streaming
+
+**演示目标**：展示 `agent.stream(..., stream_mode="messages", version="v2")` 的消息流式输出。
+
+```bash
+python 07_streaming.py
+```
+
+**预期行为**：
+1. Agent 开始回答税务问题
+2. 控制台逐步打印生成的消息片段
+3. 可通过 metadata 观察当前运行节点/上下文
+
+**证据**：回答不是一次性完整输出，而是随模型生成逐步出现。
+
+---
+
+### 示例 8：Event Streaming
+
+**演示目标**：展示 `agent.stream_events(..., version="v3")` 的事件投影，包括 messages、tool_calls、subagents。
+
+```bash
+python 08_event_streaming.py
+```
+
+**预期行为**：
+1. `stream.messages` 输出协调 Agent 消息
+2. `stream.tool_calls` 输出顶层工具调用
+3. `stream.subagents` 输出子 Agent 生命周期、消息和工具调用
+
+**证据**：控制台能区分 `[coordinator]` 与 `[subagent]` 事件来源。
+
+---
+
+### 示例 9：Filesystem Permissions
+
+**演示目标**：展示 `FilesystemPermission` 与 `permissions=[...]` 对内置文件工具的路径权限控制。
+
+```bash
+python 09_permissions.py
+```
+
+**预期行为**：
+1. `/workspace/tax-note.txt` 写入被允许
+2. `/secret.txt` 写入被拒绝
+3. Agent 在回答中说明权限拒绝结果
+
+**证据**：输出中出现允许写入和权限拒绝两个结果。
 
 ---
 
@@ -298,7 +349,10 @@ python main.py --input sample_input.txt --model ollama:qwen2.5
 - [ ] 示例 3：Planning — write_todos 分解并执行
 - [ ] 示例 4：Memory — 跨轮对话记忆生效
 - [ ] 示例 5：Tool Calling — 自定义工具被正确调用
-- [ ] 示例 6：Human-in-the-Loop — 写入前有确认提示
+- [ ] 示例 6：Human-in-the-Loop — interrupt/resume 审批链路生效
+- [ ] 示例 7：Streaming — messages 流式输出可观察
+- [ ] 示例 8：Event Streaming — subagents/messages/tool_calls 投影可观察
+- [ ] 示例 9：Filesystem Permissions — allow/deny 路径规则生效
 
 ### Part 2 税务 Agent
 

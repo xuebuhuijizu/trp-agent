@@ -27,6 +27,9 @@ created: 2026-05-26
 | 4 | Memory | 跨会话持久化记忆 |
 | 5 | Tool Calling | 自定义工具注册与调用 |
 | 6 | Human-in-the-Loop | 工具调用前审批 |
+| 7 | Streaming | message streaming |
+| 8 | Event streaming | subagents / messages / tool_calls 事件投影 |
+| 9 | Filesystem permissions | 内置文件工具路径权限控制 |
 
 ### Part 2 — 税务 Agent
 
@@ -39,7 +42,7 @@ created: 2026-05-26
 
 ## Acceptance Criteria
 
-1. [x] Part 1: 6 个示例脚本全部可运行（结构已完成，需本地 Ollama 实例可运行）
+1. [ ] Part 1: 6 个核心示例 + 3 个扩展示例已对齐官方 API；语法/静态测试通过，真实模型运行待本地 Ollama 实例验证
 2. [x] Part 1: Java 开发者可独立阅读前置知识指南后理解示例
 3. [x] Part 2: 可接受一份 Word 文档并自动提取问题
 4. [x] Part 2: 问题意图分类准确（定义/税率/合规）
@@ -75,6 +78,7 @@ Word Document (.docx)
 |-------|--------|
 | Framework | deepagents ≥ 0.6.3 |
 | LLM | Ollama (local) |
+| Ollama provider | langchain-ollama |
 | File parsing | python-docx |
 | Output | Markdown + JSON |
 | Runtime | Python ≥ 3.11 |
@@ -91,8 +95,9 @@ Word Document (.docx)
 | P0 | build_agent 改为 @staticmethod 归入 AgentExecutor | `02702ea` |
 | P1 | Part 1 示例模型配置化（`DEEPAGENTS_MODEL` 环境变量，默认 `ollama:llama3.1`） | `a958a38` |
 | P1 | deepagents 0.6.3 安装，测试 28 passed | `a958a38` |
-| P1 | Part 1 示例 API 偏差修正（memory `store`→`checkpointer`、HITL `confirmation_before`→`interrupt_on`） | `0f4b297` |
+| P1 | Part 1 示例 API 偏差修正（HITL `confirmation_before`→`interrupt_on`，但仍需补全官方 interrupt/resume 链路） | `0f4b297` |
 | P1 | Part 2 `agent_executor` API 偏差修正（`init_chat_model` 设置温度/令牌、返回值 defensive accessor） | `0f4b297` |
+| P1 | Part 1 官方 API 对齐：自定义 subagents、长期 memory、完整 HITL、streaming、event streaming、permissions | `current change` |
 
 ## Open Questions (回滚成本低的猫猫自决)
 
