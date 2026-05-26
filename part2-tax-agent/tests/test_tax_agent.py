@@ -195,12 +195,18 @@ class TestRAGDecorator:
 
 class TestAgentExecutor:
     def test_build_agent_uses_config(self, monkeypatch):
-        calls = []
+        deepagents_calls = []
+        model_kwargs = {}
+
+        def fake_init_chat_model(model, **kwargs):
+            model_kwargs.update({"model": model, **kwargs})
+            return SimpleNamespace(model=model, temperature=kwargs.get("temperature"))
 
         def fake_create_deep_agent(**kwargs):
-            calls.append(kwargs)
+            deepagents_calls.append(kwargs)
             return SimpleNamespace()
 
+        monkeypatch.setattr("langchain.chat_models.init_chat_model", fake_init_chat_model)
         monkeypatch.setitem(
             sys.modules,
             "deepagents",
@@ -212,10 +218,11 @@ class TestAgentExecutor:
         executor = agent_executor.AgentExecutor(config)
 
         assert executor._agent is not None
-        assert calls[0]["model"] == "ollama:test"
-        assert calls[0]["temperature"] == 0.2
-        assert calls[0]["max_tokens"] == 1234
-        assert "税务顾问专家" in calls[0]["system_prompt"]
+        assert model_kwargs["model"] == "ollama:test"
+        assert model_kwargs["temperature"] == 0.2
+        assert model_kwargs["max_tokens"] == 1234
+        assert deepagents_calls[0]["model"].model == "ollama:test"
+        assert "税务顾问专家" in deepagents_calls[0]["system_prompt"]
 
     def test_execute_builds_prompt_and_returns_last_message(self):
         class FakeAgent:

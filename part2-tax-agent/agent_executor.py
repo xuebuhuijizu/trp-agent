@@ -1,3 +1,5 @@
+from langchain.chat_models import init_chat_model
+
 from config import AgentConfig
 from intent_classifier import ClassifiedQuestion
 
@@ -25,17 +27,23 @@ class AgentExecutor:
     def build_agent(config: AgentConfig):
         from deepagents import create_deep_agent
 
-        return create_deep_agent(
-            model=config.model,
-            system_prompt=TAX_SYSTEM_PROMPT,
+        model = init_chat_model(
+            config.model,
             temperature=config.temperature,
             max_tokens=config.max_tokens,
+        )
+        return create_deep_agent(
+            model=model,
+            system_prompt=TAX_SYSTEM_PROMPT,
         )
 
     async def execute(self, question: ClassifiedQuestion, plan_steps: list[str]) -> str:
         prompt = self._build_prompt(question, plan_steps)
         result = await self._agent.ainvoke({"messages": [{"role": "user", "content": prompt}]})
-        return result["messages"][-1]["content"]
+        last = result["messages"][-1]
+        if isinstance(last, dict):
+            return last.get("content", "")
+        return last.content
 
     @staticmethod
     def _build_prompt(question: ClassifiedQuestion, plan_steps: list[str]) -> str:

@@ -13,8 +13,8 @@ from deepagents import create_deep_agent
 agent = create_deep_agent(
     model=os.getenv("DEEPAGENTS_MODEL", "ollama:llama3.1"),
     system_prompt="你是一个税务顾问。记住用户之前提到的信息并在后续回答中引用。",
-    # 启用持久化存储
-    store={"type": "file", "namespace": "tax_memory_demo"},
+    # 启用跨轮状态持久化
+    checkpointer=True,
 )
 
 # 第一轮对话

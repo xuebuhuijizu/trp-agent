@@ -13,8 +13,8 @@ from deepagents import create_deep_agent
 agent = create_deep_agent(
     model=os.getenv("DEEPAGENTS_MODEL", "ollama:llama3.1"),
     system_prompt="你是一个税务助手。对于可能影响重大的操作，先请求用户确认。",
-    # 启用 HITL：写文件前需要用户确认
-    confirmation_before=["write_file", "edit_file", "execute"],
+    # 启用 HITL：写/编辑文件前暂停等待用户确认
+    interrupt_on={"write_file": True, "edit_file": True},
 )
 
 result = agent.invoke({
