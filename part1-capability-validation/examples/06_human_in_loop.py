@@ -7,10 +7,11 @@ Deep Agents 能力验证 — 6. Human-in-the-Loop
 - 审批被拒后调整方案
 """
 
+import os
 from deepagents import create_deep_agent
 
 agent = create_deep_agent(
-    model="openai:gpt-4o",
+    model=os.getenv("DEEPAGENTS_MODEL", "ollama:llama3.1"),
     system_prompt="你是一个税务助手。对于可能影响重大的操作，先请求用户确认。",
     # 启用 HITL：写文件前需要用户确认
     confirmation_before=["write_file", "edit_file", "execute"],

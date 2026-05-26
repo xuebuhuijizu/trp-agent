@@ -9,10 +9,11 @@ Deep Agents 能力验证 — 1. File Tools
 - grep: 搜索文件内容
 """
 
+import os
 from deepagents import create_deep_agent
 
 agent = create_deep_agent(
-    model="openai:gpt-4o",  # 可替换为本地模型
+    model=os.getenv("DEEPAGENTS_MODEL", "ollama:llama3.1"),  # 可通过环境变量 DEEPAGENTS_MODEL 覆盖
     system_prompt="你是一个文件操作助手。使用文件工具完成需求。",
 )
 

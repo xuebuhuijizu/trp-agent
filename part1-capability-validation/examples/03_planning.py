@@ -7,10 +7,11 @@ Deep Agents 能力验证 — 3. Planning
 - 逐步执行并标记完成
 """
 
+import os
 from deepagents import create_deep_agent
 
 agent = create_deep_agent(
-    model="openai:gpt-4o",
+    model=os.getenv("DEEPAGENTS_MODEL", "ollama:llama3.1"),
     system_prompt=(
         "你是一个税务分析助手。面对复杂问题，"
         "先用 write_todos 工具列出执行计划，"

@@ -7,10 +7,11 @@ Deep Agents 能力验证 — 2. Sub-agent
 - 子 Agent 的结果返回给主 Agent
 """
 
+import os
 from deepagents import create_deep_agent
 
 agent = create_deep_agent(
-    model="openai:gpt-4o",
+    model=os.getenv("DEEPAGENTS_MODEL", "ollama:llama3.1"),
     system_prompt=(
         "你是一个研究助手。对于需要深入研究的子问题，"
         "使用 task 工具创建子 Agent 来处理，"

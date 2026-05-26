@@ -7,6 +7,7 @@ Deep Agents 能力验证 — 5. Tool Calling
 - 工具结果参与回答生成
 """
 
+import os
 from deepagents import create_deep_agent
 
 
@@ -32,7 +33,7 @@ def get_tax_rate(tax_type: str, income: float) -> float:
 
 
 agent = create_deep_agent(
-    model="openai:gpt-4o",
+    model=os.getenv("DEEPAGENTS_MODEL", "ollama:llama3.1"),
     tools=[calculate_tax, get_tax_rate],
     system_prompt="你是一个税务计算助手。使用提供的工具进行精确计算。",
 )

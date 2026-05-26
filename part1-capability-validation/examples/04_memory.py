@@ -7,10 +7,11 @@ Deep Agents 能力验证 — 4. Memory
 - 实现连续对话
 """
 
+import os
 from deepagents import create_deep_agent
 
 agent = create_deep_agent(
-    model="openai:gpt-4o",
+    model=os.getenv("DEEPAGENTS_MODEL", "ollama:llama3.1"),
     system_prompt="你是一个税务顾问。记住用户之前提到的信息并在后续回答中引用。",
     # 启用持久化存储
     store={"type": "file", "namespace": "tax_memory_demo"},
