@@ -1,11 +1,18 @@
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel, Field
 from langchain.chat_models import init_chat_model
+from deepagents.backends import FilesystemBackend
 
 from config import AgentConfig
 from intent_classifier import ClassifiedQuestion
 from tax_retrieval import extract_citations_from_messages, retrieve_tax_context
+
+PART2_ROOT = Path(__file__).resolve().parent
+SKILL_SOURCES = ["/skills"]
+MEMORY_SOURCES = ["/memories/AGENTS.md"]
 
 
 TAX_SYSTEM_PROMPT = """你是一位专业的税务顾问专家。
@@ -23,6 +30,18 @@ TAX_SYSTEM_PROMPT = """你是一位专业的税务顾问专家。
 - 需要法规依据时调用 retrieve_tax_context 工具，并在回答中引用检索到的 source_id/title
 - 不输出模型内部推理标签，例如 <think>...</think>
 """
+
+
+class TaxCitation(BaseModel):
+    source_id: str = Field(description="检索来源 ID")
+    title: str = Field(description="检索来源标题")
+
+
+class TaxAnswer(BaseModel):
+    question: str = Field(description="原始税务问题")
+    intent: str = Field(description="业务标签：definition/rate/compliance")
+    answer: str = Field(description="面向用户的中文回答")
+    citations: list[TaxCitation] = Field(default_factory=list, description="结构化引用来源")
 
 
 @dataclass
@@ -50,6 +69,10 @@ class AgentExecutor:
             model=model,
             system_prompt=TAX_SYSTEM_PROMPT,
             tools=[retrieve_tax_context],
+            skills=SKILL_SOURCES,
+            memory=MEMORY_SOURCES,
+            backend=FilesystemBackend(root_dir=PART2_ROOT, virtual_mode=True),
+            response_format=TaxAnswer,
         )
 
     async def execute(self, question: ClassifiedQuestion, plan_steps: list[str] | None = None) -> str:
@@ -64,9 +87,11 @@ class AgentExecutor:
         prompt = self._build_native_prompt(question)
         result = await self._agent.ainvoke({"messages": [{"role": "user", "content": prompt}]})
         messages = result["messages"]
+        structured_answer, structured_citations = self._structured_result(result)
+        citations = structured_citations or extract_citations_from_messages(messages)
         return ExecutionResult(
-            answer=self._last_content(messages),
-            citations=extract_citations_from_messages(messages),
+            answer=structured_answer or self._last_content(messages),
+            citations=citations,
             tool_events=self._collect_tool_events(messages),
         )
 
@@ -114,3 +139,16 @@ class AgentExecutor:
                 continue
             events.append({"name": name})
         return events
+
+    @staticmethod
+    def _structured_result(result: dict) -> tuple[str, list[dict]]:
+        structured = result.get("structured_response")
+        if not structured:
+            return "", []
+        if isinstance(structured, BaseModel):
+            data = structured.model_dump()
+        elif isinstance(structured, dict):
+            data = structured
+        else:
+            return "", []
+        return data.get("answer", ""), data.get("citations", [])

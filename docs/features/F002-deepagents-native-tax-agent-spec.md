@@ -75,10 +75,10 @@ F001 证明了 POC 可以运行 DeepAgents 示例和税务 Agent E2E 管道。�
 4. [x] RAG 实现为注册的 DeepAgents 工具，而非回答后的空操作装饰器。
 5. [x] 基于检索的回答在 JSON 输出中包含结构化引用元数据。
 6. [x] 最终的 Markdown/JSON 输出不包含泄漏的推理标签，如 `<think>...</think>`。
-7. [ ] Skills 通过 DeepAgents 原生 `skills=[...]` 加载，且税务回答规则来自 `SKILL.md`。
-8. [ ] Memory 通过 DeepAgents 原生 `memory=["/memories/AGENTS.md"]` 加载，且与仓库治理 `AGENTS.md` 明确区分。
-9. [ ] Structured output 优先通过 `response_format=` 产出；若 runtime 降级，文档需说明降级原因和替代边界。
-10. [ ] 现有测试通过，新测试覆盖规划器移除、检索工具注册、引用提取、推理标签清理、skills 加载、memory 加载和 structured output schema。
+7. [x] Skills 通过 DeepAgents 原生 `skills=[...]` 加载，且税务回答规则来自 `SKILL.md`。
+8. [x] Memory 通过 DeepAgents 原生 `memory=["/memories/AGENTS.md"]` 加载，且与仓库治理 `AGENTS.md` 明确区分。
+9. [x] Structured output 优先通过 `response_format=` 产出；若 runtime 降级，文档需说明降级原因和替代边界。
+10. [x] 现有测试通过，新测试覆盖规划器移除、检索工具注册、引用提取、推理标签清理、skills 加载、memory 加载和 structured output schema。
 11. [x] E2E 验证从 `sample_input.txt` 生成 Markdown 报告和 JSON 报告。
 
 ## 依赖

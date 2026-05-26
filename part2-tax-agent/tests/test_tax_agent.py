@@ -218,11 +218,21 @@ class TestAgentExecutor:
             deepagents_calls.append(kwargs)
             return SimpleNamespace()
 
+        class FilesystemBackend:
+            def __init__(self, root_dir, virtual_mode=None):
+                self.root_dir = root_dir
+                self.virtual_mode = virtual_mode
+
         monkeypatch.setattr("langchain.chat_models.init_chat_model", fake_init_chat_model)
         monkeypatch.setitem(
             sys.modules,
             "deepagents",
             SimpleNamespace(create_deep_agent=fake_create_deep_agent),
+        )
+        monkeypatch.setitem(
+            sys.modules,
+            "deepagents.backends",
+            SimpleNamespace(FilesystemBackend=FilesystemBackend),
         )
         agent_executor = importlib.import_module("agent_executor")
 
@@ -237,6 +247,11 @@ class TestAgentExecutor:
         assert "税务顾问专家" in deepagents_calls[0]["system_prompt"]
         assert "tools" in deepagents_calls[0]
         assert deepagents_calls[0]["tools"][0].__name__ == "retrieve_tax_context"
+        assert deepagents_calls[0]["skills"] == ["/skills"]
+        assert deepagents_calls[0]["memory"] == ["/memories/AGENTS.md"]
+        assert deepagents_calls[0]["backend"].__class__.__name__ == "FilesystemBackend"
+        assert deepagents_calls[0]["backend"].virtual_mode is True
+        assert deepagents_calls[0]["response_format"].__name__ == "TaxAnswer"
 
     def test_execute_builds_prompt_and_returns_last_message(self):
         class FakeAgent:
@@ -291,6 +306,39 @@ class TestAgentExecutor:
         prompt = fake_agent.payload["messages"][0]["content"]
         assert "write_todos" in prompt
         assert "执行计划：" not in prompt
+
+    def test_execute_with_evidence_prefers_structured_response(self):
+        class FakeAgent:
+            async def ainvoke(self, payload):
+                return {
+                    "messages": [{"content": "fallback answer"}],
+                    "structured_response": {
+                        "question": "什么是增值税",
+                        "intent": "definition",
+                        "answer": "structured answer",
+                        "citations": [{"source_id": "vat-regulation", "title": "增值税暂行条例"}],
+                    },
+                }
+
+        agent_executor = importlib.import_module("agent_executor")
+        executor = agent_executor.AgentExecutor(AgentConfig(), agent=FakeAgent())
+        question = ClassifiedQuestion(text="什么是增值税", intent="definition")
+
+        result = asyncio.run(executor.execute_with_evidence(question))
+
+        assert result.answer == "structured answer"
+        assert result.citations == [{"source_id": "vat-regulation", "title": "增值税暂行条例"}]
+
+
+def test_deepagents_skill_and_memory_files_exist():
+    root = Path(__file__).resolve().parents[1]
+    skill = root / "skills" / "tax-answering" / "SKILL.md"
+    memory = root / "memories" / "AGENTS.md"
+
+    assert skill.exists()
+    assert memory.exists()
+    assert "税务回答" in skill.read_text(encoding="utf-8")
+    assert "中国税务场景" in memory.read_text(encoding="utf-8")
 
 
 def test_main_no_longer_uses_static_planner():
