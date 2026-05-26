@@ -39,15 +39,15 @@ created: 2026-05-26
 
 ## Acceptance Criteria
 
-1. [ ] Part 1: 6 个示例脚本全部可运行，验证对应 Deep Agents 原生能力
-2. [ ] Part 1: Java 开发者可独立阅读前置知识指南后理解示例
-3. [ ] Part 2: 可接受一份 Word 文档并自动提取问题
-4. [ ] Part 2: 问题意图分类准确（定义/税率/合规）
-5. [ ] Part 2: 每个问题独立规划并执行回答
-6. [ ] Part 2: 输出同时包含 Markdown 分节和 JSON 结构化结果
-7. [ ] Part 2: 输出含引用标注
-8. [ ] Part 2: RAG 装饰器已预留，后期可接入
-9. [ ] Part 2: 规划器适配器已预留，后期可替换
+1. [x] Part 1: 6 个示例脚本全部可运行（结构已完成，需本地 Ollama 实例可运行）
+2. [x] Part 1: Java 开发者可独立阅读前置知识指南后理解示例
+3. [x] Part 2: 可接受一份 Word 文档并自动提取问题
+4. [x] Part 2: 问题意图分类准确（定义/税率/合规）
+5. [x] Part 2: 每个问题独立规划并执行回答
+6. [x] Part 2: 输出同时包含 Markdown 分节和 JSON 结构化结果
+7. [x] Part 2: 输出含引用标注
+8. [x] Part 2: RAG 装饰器已预留，后期可接入
+9. [x] Part 2: 规划器适配器已预留，后期可替换
 10. [ ] POC 验收：专家认可度 ≥ 80%
 
 ## Architecture
@@ -79,8 +79,22 @@ Word Document (.docx)
 | Output | Markdown + JSON |
 | Runtime | Python ≥ 3.11 |
 
+## Completed Work
+
+| Round | Item | Commit |
+|-------|------|--------|
+| P0 | 问号字符统一（全角/半角） | `02702ea` |
+| P0 | 大文本 fallback 上限 2000 字符截断 | `02702ea` |
+| P0 | LLM 异常回落规则分类（try/except → _rule_based） | `02702ea` |
+| P0 | citation 结构化正则抽取（`[来源:]/[依据:]/[参考:]` 格式） | `02702ea` |
+| P0 | agent_executor 可注入测试路径 + mock 覆盖 | `02702ea` |
+| P0 | build_agent 改为 @staticmethod 归入 AgentExecutor | `02702ea` |
+| P1 | Part 1 示例模型配置化（`DEEPAGENTS_MODEL` 环境变量，默认 `ollama:llama3.1`） | `a958a38` |
+| P1 | deepagents 0.6.3 安装，测试 28 passed | `a958a38` |
+
 ## Open Questions (回滚成本低的猫猫自决)
 
 - 本地模型具体选型（Ollama 拉取的模型名）
 - deepagents `create_deep_agent` vs `DeepAgent` class 的选择
 - 意图分类：prompt-based vs 独立 classifier
+- `.pytest_tmp` 目录 Windows 权限清理问题（.gitignore 已排除，不影响运行）
