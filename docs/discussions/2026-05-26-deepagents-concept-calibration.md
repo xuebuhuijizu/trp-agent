@@ -5,72 +5,72 @@ doc_kind: discussion
 created: 2026-05-26
 ---
 
-# DeepAgents Concept Calibration
+# DeepAgents 概念校准
 
-## Purpose
+## 目的
 
-Before starting the next phase, we clarified three overloaded terms in the current E2E flow:
+在启动下一阶段之前，我们澄清了当前 E2E 流程中三个易混淆的概念：
 
-- intent classification
-- planning
+- 意图分类（intent classification）
+- 规划（planning）
 - RAG
 
-The goal is to separate DeepAgents-native capabilities from project adapters and demo-only scaffolding.
+目标是区分 DeepAgents 原生能力与项目层适配器及演示脚手架。
 
-## Source Anchors
+## 信息来源
 
-- DeepAgents overview: planning and task decomposition, subagents, filesystem, memory, HITL.
+- DeepAgents 概述：规划与任务分解、子 Agent、文件系统、记忆、人机交互。
   <https://docs.langchain.com/oss/python/deepagents/overview>
-- DeepAgents context engineering and memory: context is managed through filesystem, memory files, store-backed state, and tools.
+- DeepAgents 上下文工程与记忆：通过文件系统、记忆文件、Store 后端和工具管理上下文。
   <https://docs.langchain.com/oss/python/deepagents/context-engineering>
   <https://docs.langchain.com/oss/python/deepagents/memory>
-- LangChain retrieval/RAG: retrieval augments generation with runtime external knowledge and may be two-step or agentic.
+- LangChain 检索/RAG：检索通过运行时外部知识增强生成，可以是两步式或 Agent 式。
   <https://docs.langchain.com/oss/python/langchain/retrieval>
 
-## Concept Comparison
+## 概念对比
 
-| Concept | DeepAgents / LangChain meaning | Current project meaning | Classification | Gap |
+| 概念 | DeepAgents / LangChain 含义 | 当前项目含义 | 分类 | 差距 |
 |---|---|---|---|---|
-| Intent classification | Not a standalone DeepAgents-native primitive. It can be implemented as model reasoning, a tool, structured output, or app-level routing. | `IntentClassifier` maps a tax question to `definition`, `rate`, or `compliance` before the agent runs. | Project adapter | We should not describe it as a DeepAgents feature. |
-| Planning | DeepAgents-native task decomposition via built-in planning behavior such as `write_todos`, where the agent can create and update task state during execution. | `Planner` returns a static three-step template based on the intent label, then injects it into the user prompt. | Demo scaffold / project adapter | It demonstrates a planning-like UX, but not DeepAgents-native planning. |
-| RAG | LangChain retrieval pattern. In a DeepAgents-style agent, retrieval should usually be exposed as a tool or context source the agent can call when needed. | `RAGDecorator` exposes a future adapter interface, but the default `NoopRAG` returns no documents. | Placeholder adapter | Current E2E does not perform real retrieval-augmented generation. |
+| 意图分类 | 不是独立的 DeepAgents 原生原语。可以通过模型推理、工具、结构化输出或应用层路由实现。 | `IntentClassifier` 在 Agent 运行前将税务问题映射为 `definition`、`rate` 或 `compliance`。 | 项目适配器 | 不应将其描述为 DeepAgents 特性。 |
+| 规划 | DeepAgents 原生任务分解，通过 `write_todos` 等内置规划行为实现，Agent 可在执行过程中创建和更新任务状态。 | `Planner` 根据意图标签返回静态三步模板，然后注入到用户提示词中。 | 演示脚手架 / 项目适配器 | 展示类似规划的体验，但非 DeepAgents 原生规划。 |
+| RAG | LangChain 检索模式。在 DeepAgents 风格的 Agent 中，检索通常应作为 Agent 需要时可调用的工具或上下文源暴露。 | `RAGDecorator` 暴露了未来的适配器接口，但默认的 `NoopRAG` 不返回任何文档。 | 占位适配器 | 当前 E2E 未执行真正的检索增强生成。 |
 
-## Current E2E Interpretation
+## 当前 E2E 流程解读
 
-The current Part 2 E2E flow verifies this pipeline:
-
-```text
-input text
-  -> question extraction
-  -> project-level intent classification
-  -> static project planner
-  -> DeepAgents answer execution
-  -> optional no-op RAG decoration
-  -> Markdown/JSON output
-```
-
-This is a valid POC pipeline, but only the answer execution step is directly backed by DeepAgents in Part 2.
-
-## Recommended Next Direction
-
-For the next phase, move Part 2 closer to DeepAgents by changing the pipeline shape:
+当前 Part 2 E2E 流程验证了以下管道：
 
 ```text
-input text
-  -> question extraction
-  -> DeepAgents agent with native planning + retrieval tool
-  -> output formatter
+输入文本
+  -> 问题提取
+  -> 项目层意图分类
+  -> 静态项目规划器
+  -> DeepAgents 回答执行
+  -> 可选的空操作 RAG 装饰
+  -> Markdown/JSON 输出
 ```
 
-Intent classification can remain as report metadata, but it should not be used to claim DeepAgents-native routing or planning.
+这是一个有效的 POC 管道，但只有回答执行步骤直接由 Part 2 中的 DeepAgents 驱动。
 
-RAG should become an actual retrieval tool registered with `create_deep_agent(tools=[...])`, not a no-op decorator after answer generation.
+## 建议的下一方向
 
-## Known Output Quality Findings
+下一阶段，通过改变管道形态使 Part 2 更贴近 DeepAgents：
 
-The current generated output proves the pipeline runs, but it also shows two quality gaps:
+```text
+输入文本
+  -> 问题提取
+  -> 带有原生规划 + 检索工具的 DeepAgents Agent
+  -> 输出格式化器
+```
 
-- model reasoning tags such as `<think>...</think>` leak into the final report
-- JSON `citations` arrays are empty even when the answer body contains legal basis text
+意图分类可以保留为报告元数据，但不应用来声称 DeepAgents 原生的路由或规划能力。
 
-These are not blockers for the F001 POC, but they should be addressed before demo-quality output or external review.
+RAG 应成为通过 `create_deep_agent(tools=[...])` 注册的实际检索工具，而不是回答生成后的空操作装饰器。
+
+## 已知输出质量问题
+
+当前生成的输出证明管道可运行，但也显示两个质量缺口：
+
+- 模型推理标签如 `<think>...</think>` 泄漏到最终报告中
+- JSON `citations` 数组为空，即使回答正文包含税法依据文字
+
+这些不是 F001 POC 的阻塞项，但在达到演示级输出或外部审查前应解决。

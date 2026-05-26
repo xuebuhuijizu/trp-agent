@@ -6,68 +6,68 @@ doc_kind: spec
 created: 2026-05-26
 ---
 
-# F002: DeepAgents-Native Tax Agent Refinement
+# F002: DeepAgents 原生税务 Agent 优化
 
-> Status: spec | Owner: TBD
+> 状态: spec | 负责人: 待定
 
-## Why
+## 为什么
 
-F001 proved that the POC can run DeepAgents examples and a tax-agent E2E pipeline. However, several concepts in Part 2 are currently implemented as project-level adapters:
+F001 证明了 POC 可以运行 DeepAgents 示例和税务 Agent E2E 管道。但 Part 2 中的几个概念当前是以项目层适配器实现的：
 
-- intent classification is a pre-agent business taxonomy
-- planning is a static template selected by intent
-- RAG is a no-op decorator placeholder
+- 意图分类是 Agent 之前的业务分类
+- 规划是由意图选择的静态模板
+- RAG 是空操作的装饰器占位
 
-The next phase should make Part 2 closer to DeepAgents' native execution model, especially native planning and agentic retrieval.
+下一阶段应使 Part 2 更贴近 DeepAgents 的原生执行模型，特别是原生规划和 Agent 式检索。
 
-## What
+## 做什么
 
-Refactor the Part 2 tax agent so the core reasoning loop is driven by DeepAgents rather than by static precomputed plans.
+重构 Part 2 税务 Agent，使核心推理循环由 DeepAgents 驱动，而非静态预计算计划。
 
-### In Scope
+### 范围内
 
-1. Replace static planner-driven prompt construction with a DeepAgents-native planning path.
-   - The agent should be instructed to decompose work using its native planning behavior.
-   - Runtime verification should capture evidence that the agent used planning, for example `write_todos` tool events in streaming output.
+1. 用 DeepAgents 原生规划路径替换静态规划器驱动的提示词构建。
+   - Agent 应被指示使用其原生规划行为分解工作。
+   - 运行时验证应捕获 Agent 使用规划的证据，例如流式输出中的 `write_todos` 工具事件。
 
-2. Replace the no-op RAG decorator with an actual retrieval tool.
-   - Register a retrieval tool through `create_deep_agent(tools=[...])`.
-   - Start with a small local tax knowledge corpus committed in the repo.
-   - Retrieval results must include source identifiers that can become structured citations.
+2. 用实际的检索工具替换空操作的 RAG 装饰器。
+   - 通过 `create_deep_agent(tools=[...])` 注册检索工具。
+   - 从仓库中提交的小型本地税务知识语料库开始。
+   - 检索结果必须包含源标识符，以便生成结构化引用。
 
-3. Reposition intent classification.
-   - Keep `definition` / `rate` / `compliance` as business report metadata if useful.
-   - Do not use the classifier as the main planner switch.
-   - Do not describe intent classification as DeepAgents-native.
+3. 重新定位意图分类。
+   - 如有用，保留 `definition` / `rate` / `compliance` 作为业务报告元数据。
+   - 不要将分类器用作主要规划开关。
+   - 不要将意图分类描述为 DeepAgents 原生能力。
 
-4. Improve output quality.
-   - Strip model reasoning tags such as `<think>...</think>` from final Markdown/JSON.
-   - Populate JSON `citations` from retrieved sources when retrieval is used.
-   - Preserve Markdown and JSON outputs as the public artifacts.
+4. 改进输出质量。
+   - 从最终的 Markdown/JSON 中剥离模型推理标签（如 `<think>...</think>`）。
+   - 使用检索结果填充 JSON `citations` 字段。
+   - 保留 Markdown 和 JSON 输出作为公开产物。
 
-### Out of Scope
+### 范围外
 
-- Production-grade tax-law knowledge base.
-- External vector database or hosted RAG service.
-- Expert legal/tax validation.
-- Full local Ollama/vLLM rerun unless separately requested.
+- 生产级税法知识库。
+- 外部向量数据库或托管的 RAG 服务。
+- 专家法律/税务验证。
+- 除非单独要求，否则不完整重跑本地 Ollama/vLLM。
 
-## Acceptance Criteria
+## 验收标准
 
-1. [ ] Concept record exists and clearly distinguishes DeepAgents-native capabilities from project adapters.
-2. [ ] Part 2 no longer depends on static `DefaultPlanner` templates to drive answer execution.
-3. [ ] At least one Part 2 runtime verification captures DeepAgents-native planning evidence, such as `write_todos` tool events.
-4. [ ] RAG is implemented as a registered DeepAgents tool, not as a post-answer no-op decorator.
-5. [ ] Retrieval-backed answers include structured citation metadata in JSON output.
-6. [ ] Final Markdown/JSON outputs do not contain leaked reasoning tags such as `<think>...</think>`.
-7. [ ] Existing tests pass, and new tests cover planner removal, retrieval tool registration, citation extraction, and reasoning-tag cleanup.
-8. [ ] E2E validation produces a Markdown report and JSON report from `sample_input.txt`.
+1. [ ] 存在概念记录，明确区分 DeepAgents 原生能力与项目适配器。
+2. [ ] Part 2 不再依赖静态 `DefaultPlanner` 模板驱动回答执行。
+3. [ ] 至少一次 Part 2 运行时验证捕获 DeepAgents 原生规划证据，如 `write_todos` 工具事件。
+4. [ ] RAG 实现为注册的 DeepAgents 工具，而非回答后的空操作装饰器。
+5. [ ] 基于检索的回答在 JSON 输出中包含结构化引用元数据。
+6. [ ] 最终的 Markdown/JSON 输出不包含泄漏的推理标签，如 `<think>...</think>`。
+7. [ ] 现有测试通过，新测试覆盖规划器移除、检索工具注册、引用提取和推理标签清理。
+8. [ ] E2E 验证从 `sample_input.txt` 生成 Markdown 报告和 JSON 报告。
 
-## Dependencies
+## 依赖
 
 - `deepagents >= 0.6.3`
-- MiniMax OpenAI-compatible runtime used in F001 validation
-- Existing Part 2 modules:
+- F001 验证中使用的 MiniMax OpenAI 兼容运行时
+- 现有 Part 2 模块：
   - `question_extractor.py`
   - `intent_classifier.py`
   - `planner.py`
@@ -75,39 +75,39 @@ Refactor the Part 2 tax agent so the core reasoning loop is driven by DeepAgents
   - `agent_executor.py`
   - `output_formatter.py`
 
-## Proposed Architecture
+## 建议架构
 
 ```text
 sample_input.txt / input.docx
   -> question_extractor
-  -> optional intent metadata
+  -> 可选的意图元数据
   -> AgentExecutor
        -> create_deep_agent(
             tools=[retrieve_tax_context],
-            system_prompt=tax prompt with planning + citation rules
+            system_prompt=带规划 + 引用规则的税务提示词
           )
-       -> native planning/tool loop
+       -> 原生规划/工具循环
   -> output_formatter
-       -> strip reasoning tags
+       -> 剥离推理标签
        -> Markdown
-       -> JSON with citations
+       -> 带引用的 JSON
 ```
 
-## Implementation Notes
+## 实现说明
 
-### Planning
+### 规划
 
-The static `Planner` can be kept temporarily for compatibility, but the main E2E path should stop injecting static plan steps into the user prompt.
+静态 `Planner` 可暂时保留以兼容，但主 E2E 路径应停止将静态计划步骤注入用户提示词。
 
-Preferred runtime evidence:
+推荐的运行时证据：
 
-- use `agent.stream(..., version="v2")` or `agent.stream_events(..., version="v3")`
-- capture tool events
-- assert at least one planning-related event appears for a multi-step tax question
+- 使用 `agent.stream(..., version="v2")` 或 `agent.stream_events(..., version="v3")`
+- 捕获工具事件
+- 对多步骤税务问题断言至少出现一个规划相关事件
 
-### Retrieval Tool
+### 检索工具
 
-Start with a simple local tool:
+从简单的本地工具开始：
 
 ```python
 def retrieve_tax_context(query: str) -> list[dict]:
@@ -120,13 +120,13 @@ def retrieve_tax_context(query: str) -> list[dict]:
     ]
 ```
 
-This is enough to prove the DeepAgents tool path without introducing a vector database.
+这足以证明 DeepAgents 工具路径，而无需引入向量数据库。
 
-### Output Formatting
+### 输出格式化
 
-The formatter should treat citations as structured data, not only text inside the model answer.
+格式化器应将引用视为结构化数据，而不仅仅是模型答案中的文本。
 
-Minimum JSON shape:
+最小的 JSON 结构：
 
 ```json
 {
@@ -142,14 +142,14 @@ Minimum JSON shape:
 }
 ```
 
-## Risk
+## 风险
 
-- Tool-calling behavior depends on model compliance. Runtime tests should use prompts that make retrieval necessary.
-- DeepAgents event formats may vary by `stream` / `stream_events` version. Tests should isolate event parsing behind a small helper.
-- A small local corpus can prove mechanics but not tax-law completeness.
+- 工具调用行为取决于模型遵从度。运行时测试应使用使检索成为必要的提示词。
+- DeepAgents 事件格式可能因 `stream` / `stream_events` 版本而异。测试应将事件解析隔离到一个小型辅助函数中。
+- 小型本地语料库可以证明机制，但不能证明税法的完整性。
 
-## Open Questions
+## 开放问题
 
-- Should intent classification remain before agent execution only for reporting, or move after answer generation as output metadata?
-- Should F002 remove `Planner` entirely or keep it as a legacy adapter with tests proving it is not used in the main path?
-- Should the first retrieval corpus be handcrafted tax snippets or generated from public legal references?
+- 意图分类应放在 Agent 执行前仅用于报告，还是移至回答生成后作为输出元数据？
+- F002 应完全移除 `Planner`，还是保留为遗留适配器并附加测试证明主路径未使用它？
+- 第一个检索语料库应是手工制作的税务片段，还是从公开法律参考文献生成？
