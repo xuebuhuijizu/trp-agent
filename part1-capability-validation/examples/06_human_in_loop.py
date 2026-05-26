@@ -52,7 +52,12 @@ if result.interrupts:
     )
 
 messages = result.value["messages"] if hasattr(result, "value") else result["messages"]
-print(messages[-1]["content"])
+last = messages[-1]
+if isinstance(last, dict):
+    text = last.get("content", "")
+else:
+    text = last.content
+print(text)
 """
 预期行为：
 - agent 进行分析后准备写入文件

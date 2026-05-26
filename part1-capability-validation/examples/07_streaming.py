@@ -16,7 +16,7 @@ agent = create_deep_agent(
     system_prompt="你是一个税务分析助手。回答时分步骤说明。",
 )
 
-stream = agent.stream(
+for chunk in agent.stream(
     {
         "messages": [
             {
@@ -27,12 +27,12 @@ stream = agent.stream(
     },
     stream_mode="messages",
     version="v2",
-)
-
-for chunk, metadata in stream:
-    text = getattr(chunk, "content", "")
-    if text:
-        print(text, end="", flush=True)
+):
+    if chunk["type"] == "messages":
+        token, metadata = chunk["data"]
+        text = getattr(token, "content", "")
+        if text:
+            print(text, end="", flush=True)
 
 """
 预期行为：
