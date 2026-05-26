@@ -91,6 +91,8 @@ Word Document (.docx)
 | P0 | build_agent 改为 @staticmethod 归入 AgentExecutor | `02702ea` |
 | P1 | Part 1 示例模型配置化（`DEEPAGENTS_MODEL` 环境变量，默认 `ollama:llama3.1`） | `a958a38` |
 | P1 | deepagents 0.6.3 安装，测试 28 passed | `a958a38` |
+| P1 | Part 1 示例 API 偏差修正（memory `store`→`checkpointer`、HITL `confirmation_before`→`interrupt_on`） | `0f4b297` |
+| P1 | Part 2 `agent_executor` API 偏差修正（`init_chat_model` 设置温度/令牌、返回值 defensive accessor） | `0f4b297` |
 
 ## Open Questions (回滚成本低的猫猫自决)
 
