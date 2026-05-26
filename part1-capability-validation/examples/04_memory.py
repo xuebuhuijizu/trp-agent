@@ -36,23 +36,22 @@ store.put(
 )
 
 
-def build_memory_backend(runtime):
-    return CompositeBackend(
-        default=StateBackend(runtime),
-        routes={
-            "/memories/": StoreBackend(
-                runtime,
-                namespace=lambda _runtime: ("tax-memory-demo",),
-            ),
-        },
-    )
+memory_backend = CompositeBackend(
+    default=StateBackend(),
+    routes={
+        "/memories/": StoreBackend(
+            store=store,
+            namespace=lambda _runtime: ("tax-memory-demo",),
+        ),
+    },
+)
 
 
 agent = create_deep_agent(
     model=os.getenv("DEEPAGENTS_MODEL", "openai:Minimax-M2.7"),
     system_prompt="你是一个税务顾问。读取长期记忆后回答用户问题。",
     memory=["/memories/AGENTS.md"],
-    backend=build_memory_backend,
+    backend=memory_backend,
     store=store,
 )
 

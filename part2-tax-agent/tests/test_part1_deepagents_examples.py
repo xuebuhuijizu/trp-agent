@@ -40,6 +40,11 @@ def test_memory_example_uses_long_term_memory_api():
     assert "store" in keywords
     assert "checkpointer=True" not in source
     assert '"/memories/AGENTS.md"' in source
+    assert "StateBackend(runtime)" not in source
+    assert "StoreBackend(\n                runtime," not in source
+    assert "backend=build_memory_backend" not in source
+    assert "memory_backend = CompositeBackend" in source
+    assert "backend=memory_backend" in source
 
 
 def test_hitl_example_uses_interrupt_resume_pattern():
