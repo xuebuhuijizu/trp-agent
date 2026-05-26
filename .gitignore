@@ -8,3 +8,5 @@ venv/
 output/
 *.docx
 .pytest_tmp/
+.pytest_tmp*/
+.env

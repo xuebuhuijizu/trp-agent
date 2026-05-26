@@ -4,7 +4,7 @@ from typing import Optional
 
 @dataclass
 class AgentConfig:
-    model: str = "ollama:llama3.1"
+    model: str = "openai:Minimax-M2.7"
     input_file: str = "input.docx"
     output_dir: str = "output"
     temperature: float = 0.1

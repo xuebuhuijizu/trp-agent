@@ -153,6 +153,18 @@ class TestOutputFormatter:
         assert js["intent"] == "definition"
         assert "citations" in js
 
+    def test_format_strips_reasoning_tags_and_uses_structured_citations(self):
+        formatter = OutputFormatter()
+        q = ClassifiedQuestion(text="什么是增值税", intent="definition")
+        citations = [{"source_id": "vat-regulation", "title": "增值税暂行条例"}]
+
+        result = formatter.format(q, "<think>内部推理</think>\n增值税是一种流转税", citations=citations)
+
+        answer = result["answer_json"]["answer"]
+        assert "<think>" not in answer
+        assert "内部推理" not in answer
+        assert result["answer_json"]["citations"] == citations
+
     def test_extract_citations(self):
         text = "根据税法规定\n[来源: 增值税暂行条例]\n参考相关法规"
         citations = OutputFormatter._extract_citations(text)
@@ -223,6 +235,8 @@ class TestAgentExecutor:
         assert model_kwargs["max_tokens"] == 1234
         assert deepagents_calls[0]["model"].model == "ollama:test"
         assert "税务顾问专家" in deepagents_calls[0]["system_prompt"]
+        assert "tools" in deepagents_calls[0]
+        assert deepagents_calls[0]["tools"][0].__name__ == "retrieve_tax_context"
 
     def test_execute_builds_prompt_and_returns_last_message(self):
         class FakeAgent:
@@ -246,3 +260,41 @@ class TestAgentExecutor:
         assert "definition" in prompt
         assert "1. 确认概念" in prompt
         assert "2. 给出依据" in prompt
+
+    def test_execute_with_evidence_uses_native_prompt_and_extracts_tool_citations(self):
+        class FakeAgent:
+            def __init__(self):
+                self.payload = None
+
+            async def ainvoke(self, payload):
+                self.payload = payload
+                return {
+                    "messages": [
+                        {
+                            "name": "retrieve_tax_context",
+                            "content": '{"sources": [{"source_id": "vat-regulation", "title": "增值税暂行条例"}]}',
+                        },
+                        {"content": "final answer"},
+                    ]
+                }
+
+        fake_agent = FakeAgent()
+        agent_executor = importlib.import_module("agent_executor")
+        executor = agent_executor.AgentExecutor(AgentConfig(), agent=fake_agent)
+        question = ClassifiedQuestion(text="什么是增值税", intent="definition")
+
+        result = asyncio.run(executor.execute_with_evidence(question))
+
+        assert result.answer == "final answer"
+        assert result.citations == [{"source_id": "vat-regulation", "title": "增值税暂行条例"}]
+        assert result.tool_events[0]["name"] == "retrieve_tax_context"
+        prompt = fake_agent.payload["messages"][0]["content"]
+        assert "write_todos" in prompt
+        assert "执行计划：" not in prompt
+
+
+def test_main_no_longer_uses_static_planner():
+    source = (Path(__file__).resolve().parents[1] / "main.py").read_text(encoding="utf-8")
+
+    assert "from planner import Planner" not in source
+    assert "Planner()" not in source

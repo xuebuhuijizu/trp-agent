@@ -10,12 +10,13 @@ CITATION_PATTERN = re.compile(r"^[\[【](来源|依据|参考)\s*[:：].+[\]】]
 
 
 class OutputFormatter:
-    def format(self, question: ClassifiedQuestion, answer: str) -> dict:
+    def format(self, question: ClassifiedQuestion, answer: str, citations: list[dict] | None = None, tool_events: list[dict] | None = None) -> dict:
+        clean_answer = self._strip_reasoning_tags(answer)
         return {
             "question": question.text,
             "intent": question.intent,
-            "answer_markdown": self._to_markdown(question, answer),
-            "answer_json": self._to_json(question, answer),
+            "answer_markdown": self._to_markdown(question, clean_answer),
+            "answer_json": self._to_json(question, clean_answer, citations=citations, tool_events=tool_events),
         }
 
     def write_all(self, results: list[dict], output_dir: str | Path):
@@ -52,12 +53,13 @@ class OutputFormatter:
 
 """
 
-    def _to_json(self, question: ClassifiedQuestion, answer: str) -> dict:
+    def _to_json(self, question: ClassifiedQuestion, answer: str, citations: list[dict] | None = None, tool_events: list[dict] | None = None) -> dict:
         return {
             "question": question.text,
             "intent": question.intent,
             "answer": answer,
-            "citations": self._extract_citations(answer),
+            "citations": citations if citations is not None else self._extract_citations(answer),
+            "tool_events": tool_events or [],
         }
 
     @staticmethod
@@ -92,3 +94,7 @@ class OutputFormatter:
             if CITATION_PATTERN.match(line):
                 citations.append(line)
         return citations
+
+    @staticmethod
+    def _strip_reasoning_tags(text: str) -> str:
+        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()

@@ -45,6 +45,21 @@ F001 证明了 POC 可以运行 DeepAgents 示例和税务 Agent E2E 管道。�
    - 使用检索结果填充 JSON `citations` 字段。
    - 保留 Markdown 和 JSON 输出作为公开产物。
 
+5. 纳入 DeepAgents Skills。
+   - 新增仓库内税务回答 skill，例如 `part2-tax-agent/skills/tax-answering/SKILL.md`。
+   - 将税务回答风格、引用要求、风险提示、中文输出等规则放入 skill，而不是继续堆叠 system prompt。
+   - 通过 DeepAgents 原生 `skills=[...]` 参数加载，并保留运行或测试证据。
+
+6. 纳入 DeepAgents Memory (AGENTS.md)。
+   - 新增语义记忆文件，例如 `part2-tax-agent/memories/AGENTS.md`。
+   - 使用 DeepAgents 原生 `memory=["/memories/AGENTS.md"]` 加载长期偏好。
+   - 明确区分 DeepAgents 语义记忆 `AGENTS.md` 与仓库根目录治理规则 `AGENTS.md`。
+
+7. 纳入 Structured output。
+   - 定义税务回答结构化 schema，例如 `TaxAnswer` / `TaxReport`。
+   - 优先使用 DeepAgents/LangChain 原生 `response_format=` 与 `structured_response`。
+   - 若 MiniMax OpenAI-compatible runtime 对 provider-native structured output 不稳定，允许降级为 LangChain ToolStrategy 或项目 formatter，但必须在文档和测试中标注能力边界。
+
 ### 范围外
 
 - 生产级税法知识库。
@@ -60,8 +75,11 @@ F001 证明了 POC 可以运行 DeepAgents 示例和税务 Agent E2E 管道。�
 4. [ ] RAG 实现为注册的 DeepAgents 工具，而非回答后的空操作装饰器。
 5. [ ] 基于检索的回答在 JSON 输出中包含结构化引用元数据。
 6. [ ] 最终的 Markdown/JSON 输出不包含泄漏的推理标签，如 `<think>...</think>`。
-7. [ ] 现有测试通过，新测试覆盖规划器移除、检索工具注册、引用提取和推理标签清理。
-8. [ ] E2E 验证从 `sample_input.txt` 生成 Markdown 报告和 JSON 报告。
+7. [ ] Skills 通过 DeepAgents 原生 `skills=[...]` 加载，且税务回答规则来自 `SKILL.md`。
+8. [ ] Memory 通过 DeepAgents 原生 `memory=["/memories/AGENTS.md"]` 加载，且与仓库治理 `AGENTS.md` 明确区分。
+9. [ ] Structured output 优先通过 `response_format=` 产出；若 runtime 降级，文档需说明降级原因和替代边界。
+10. [ ] 现有测试通过，新测试覆盖规划器移除、检索工具注册、引用提取、推理标签清理、skills 加载、memory 加载和 structured output schema。
+11. [ ] E2E 验证从 `sample_input.txt` 生成 Markdown 报告和 JSON 报告。
 
 ## 依赖
 
@@ -94,6 +112,26 @@ sample_input.txt / input.docx
 ```
 
 ## 实现说明
+
+### 分刀顺序
+
+F002 不一次性堆完全部能力，按以下顺序实施：
+
+1. **第一刀：架构换轨**
+   - `main.py` 不再依赖静态 `Planner`
+   - `AgentExecutor` 注册 `retrieve_tax_context`
+   - 捕获 tool/citation 证据
+   - 清理 `<think>` 并填充 citations
+
+2. **第二刀：Skills + Memory**
+   - 新增中文 `SKILL.md`
+   - 新增 DeepAgents 语义记忆 `AGENTS.md`
+   - 使用 `skills=[...]` 与 `memory=[...]` 接入 DeepAgents 原生机制
+
+3. **第三刀：Structured output**
+   - 定义 Pydantic schema
+   - 优先使用 `response_format=`
+   - 验证 `structured_response` 是否在 MiniMax OpenAI-compatible runtime 下稳定工作
 
 ### 规划
 
@@ -142,6 +180,59 @@ def retrieve_tax_context(query: str) -> list[dict]:
 }
 ```
 
+### Skills
+
+Skills 用于表达“税务回答这类任务应该怎么做”，而不是表达一次性 prompt。
+
+候选路径：
+
+```text
+part2-tax-agent/skills/tax-answering/SKILL.md
+```
+
+最小内容应包括：
+
+- 使用中文回答
+- 先说明适用前提，再给结论
+- 需要法规依据时调用检索工具
+- 引用必须保留 `source_id` 和 `title`
+- 不输出模型内部推理
+
+### Memory (AGENTS.md)
+
+DeepAgents memory 的 `AGENTS.md` 是语义记忆，不是仓库治理文件。
+
+候选路径：
+
+```text
+part2-tax-agent/memories/AGENTS.md
+```
+
+最小内容应包括：
+
+- 税务 Agent 默认面向中国税务场景
+- 回答需明确不确定性和适用条件
+- 优先使用仓库内税务检索工具给出依据
+
+### Structured output
+
+候选 schema：
+
+```python
+class TaxCitation(BaseModel):
+    source_id: str
+    title: str
+
+
+class TaxAnswer(BaseModel):
+    question: str
+    intent: str
+    answer: str
+    citations: list[TaxCitation]
+```
+
+验收重点不是“JSON 看起来结构化”，而是通过 DeepAgents/LangChain 原生 structured output 路径获得结构化结果；若 runtime 不支持，必须显式记录降级。
+
 ## 风险
 
 - 工具调用行为取决于模型遵从度。运行时测试应使用使检索成为必要的提示词。
@@ -150,6 +241,10 @@ def retrieve_tax_context(query: str) -> list[dict]:
 
 ## 开放问题
 
-- 意图分类应放在 Agent 执行前仅用于报告，还是移至回答生成后作为输出元数据？
-- F002 应完全移除 `Planner`，还是保留为遗留适配器并附加测试证明主路径未使用它？
-- 第一个检索语料库应是手工制作的税务片段，还是从公开法律参考文献生成？
+以下问题已由 CVO 在 2026-05-27 拍板：
+
+- 意图分类保留为业务报告元数据，不再驱动主执行路径。
+- `Planner` 先保留为遗留适配器，但主 E2E 路径不得调用；测试需证明主路径未使用它。
+- 第一版检索语料库使用仓库内小型中文税务知识片段，先证明 DeepAgents 工具路径，不接外部向量库。
+- `write_todos` 运行证据必须可验证，不能只靠提示词声明；优先通过 `stream` / `stream_events` 捕获工具事件，若模型偶发不调用，应设计足够复杂的问题触发多步规划。
+- Skills、Memory、Structured output 纳入 F002，但按“第一刀架构换轨 → 第二刀 Skills/Memory → 第三刀 Structured output”的顺序实施。

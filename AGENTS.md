@@ -27,5 +27,4 @@
 - Backlog: BACKLOG.md (hot) → Feature files (warm) → raw docs (cold)
 - Feature lifecycle: kickoff → discussion → implementation → review → completion
 - SOP: See docs/SOP.md for the 6-step workflow
-- **Language**: All persistent documents (spec, guide, discussion, decision) must be written in Chinese. Generated content in English must be translated to Chinese before commit.
 <!-- CAT-CAFE-GOVERNANCE-END -->

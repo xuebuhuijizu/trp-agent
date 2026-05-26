@@ -1,7 +1,11 @@
+from dataclasses import dataclass, field
+from typing import Any
+
 from langchain.chat_models import init_chat_model
 
 from config import AgentConfig
 from intent_classifier import ClassifiedQuestion
+from tax_retrieval import extract_citations_from_messages, retrieve_tax_context
 
 
 TAX_SYSTEM_PROMPT = """你是一位专业的税务顾问专家。
@@ -15,7 +19,17 @@ TAX_SYSTEM_PROMPT = """你是一位专业的税务顾问专家。
 - 结构清晰，分点阐述
 - 如引用法规或数据，标注来源
 - 如不确定，明确说明局限性
+- 对复杂问题先使用 DeepAgents 原生规划能力（write_todos）拆解任务
+- 需要法规依据时调用 retrieve_tax_context 工具，并在回答中引用检索到的 source_id/title
+- 不输出模型内部推理标签，例如 <think>...</think>
 """
+
+
+@dataclass
+class ExecutionResult:
+    answer: str
+    citations: list[dict] = field(default_factory=list)
+    tool_events: list[dict] = field(default_factory=list)
 
 
 class AgentExecutor:
@@ -35,15 +49,26 @@ class AgentExecutor:
         return create_deep_agent(
             model=model,
             system_prompt=TAX_SYSTEM_PROMPT,
+            tools=[retrieve_tax_context],
         )
 
-    async def execute(self, question: ClassifiedQuestion, plan_steps: list[str]) -> str:
+    async def execute(self, question: ClassifiedQuestion, plan_steps: list[str] | None = None) -> str:
+        if plan_steps is None:
+            return (await self.execute_with_evidence(question)).answer
+
         prompt = self._build_prompt(question, plan_steps)
         result = await self._agent.ainvoke({"messages": [{"role": "user", "content": prompt}]})
-        last = result["messages"][-1]
-        if isinstance(last, dict):
-            return last.get("content", "")
-        return last.content
+        return self._last_content(result["messages"])
+
+    async def execute_with_evidence(self, question: ClassifiedQuestion) -> ExecutionResult:
+        prompt = self._build_native_prompt(question)
+        result = await self._agent.ainvoke({"messages": [{"role": "user", "content": prompt}]})
+        messages = result["messages"]
+        return ExecutionResult(
+            answer=self._last_content(messages),
+            citations=extract_citations_from_messages(messages),
+            tool_events=self._collect_tool_events(messages),
+        )
 
     @staticmethod
     def _build_prompt(question: ClassifiedQuestion, plan_steps: list[str]) -> str:
@@ -58,3 +83,34 @@ class AgentExecutor:
 {plan_text}
 
 请按照计划逐步回答，最终给出结构化的答案。"""
+
+    @staticmethod
+    def _build_native_prompt(question: ClassifiedQuestion) -> str:
+        return f"""请回答以下税务问题。
+
+问题：{question.text}
+
+业务标签：{question.intent}
+
+请使用 DeepAgents 原生工作方式完成任务：
+1. 对需要多步判断的问题，使用 write_todos 拆解并跟踪任务。
+2. 需要法规依据、政策来源或税务定义时，调用 retrieve_tax_context。
+3. 回答必须结构化，并引用检索工具返回的 source_id/title。
+4. 不要输出 <think>...</think> 或其他内部推理标签。"""
+
+    @staticmethod
+    def _last_content(messages: list[Any]) -> str:
+        last = messages[-1]
+        if isinstance(last, dict):
+            return last.get("content", "")
+        return getattr(last, "content", "")
+
+    @staticmethod
+    def _collect_tool_events(messages: list[Any]) -> list[dict]:
+        events = []
+        for message in messages:
+            name = message.get("name") if isinstance(message, dict) else getattr(message, "name", None)
+            if not name:
+                continue
+            events.append({"name": name})
+        return events
