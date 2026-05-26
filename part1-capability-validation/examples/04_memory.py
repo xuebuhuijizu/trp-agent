@@ -8,10 +8,19 @@ Deep Agents 能力验证 — 4. Memory
 """
 
 import os
-from deepagents import create_deep_agent
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=r"E:\ai-project\poc-demo\.env")
+from deepagents import create_deep_agent, register_provider_profile, ProviderProfile
 from deepagents.backends import CompositeBackend, StateBackend, StoreBackend
 from deepagents.backends.utils import create_file_data
 from langgraph.store.memory import InMemoryStore
+
+
+
+register_provider_profile(
+    "openai:Minimax-M2.7",
+    ProviderProfile(init_kwargs={"use_responses_api": False}),
+)
 
 
 store = InMemoryStore()
@@ -40,7 +49,7 @@ def build_memory_backend(runtime):
 
 
 agent = create_deep_agent(
-    model=os.getenv("DEEPAGENTS_MODEL", "ollama:llama3.1"),
+    model=os.getenv("DEEPAGENTS_MODEL", "openai:Minimax-M2.7"),
     system_prompt="你是一个税务顾问。读取长期记忆后回答用户问题。",
     memory=["/memories/AGENTS.md"],
     backend=build_memory_backend,
@@ -56,7 +65,7 @@ result1 = agent.invoke({
         }
     ]
 }, config={"configurable": {"thread_id": "tax-memory-demo-1"}})
-print("Round 1:", result1["messages"][-1]["content"][:100])
+print("Round 1:", result1["messages"][-1].content[:100])
 
 # Thread 2：不同 thread 仍可通过同一 memory backend 读取长期记忆
 result2 = agent.invoke({
@@ -67,7 +76,7 @@ result2 = agent.invoke({
         }
     ]
 }, config={"configurable": {"thread_id": "tax-memory-demo-2"}})
-print("Round 2:", result2["messages"][-1]["content"][:100])
+print("Round 2:", result2["messages"][-1].content[:100])
 
 """
 预期行为：

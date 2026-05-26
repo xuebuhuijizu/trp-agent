@@ -8,15 +8,22 @@ Deep Agents 能力验证 — 6. Human-in-the-Loop
 """
 
 import os
-from deepagents import create_deep_agent
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=r"E:\ai-project\poc-demo\.env")
+from deepagents import create_deep_agent, register_provider_profile, ProviderProfile
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
+
+register_provider_profile(
+    "openai:Minimax-M2.7",
+    ProviderProfile(init_kwargs={"use_responses_api": False}),
+)
 
 
 checkpointer = MemorySaver()
 
 agent = create_deep_agent(
-    model=os.getenv("DEEPAGENTS_MODEL", "ollama:llama3.1"),
+    model=os.getenv("DEEPAGENTS_MODEL", "openai:Minimax-M2.7"),
     system_prompt="你是一个税务助手。对于可能影响重大的操作，先请求用户确认。",
     # 启用 HITL：写/编辑文件前暂停等待用户确认
     interrupt_on={"write_file": True, "edit_file": True},

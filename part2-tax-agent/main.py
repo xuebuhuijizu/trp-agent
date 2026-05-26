@@ -6,6 +6,14 @@
 
 import asyncio
 import argparse
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=r"E:\ai-project\poc-demo\.env")
+from deepagents import register_provider_profile, ProviderProfile
+
+register_provider_profile(
+    "openai:Minimax-M2.7",
+    ProviderProfile(init_kwargs={"use_responses_api": False}),
+)
 
 from config import AgentConfig
 from question_extractor import extract_questions

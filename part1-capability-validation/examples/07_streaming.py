@@ -8,11 +8,17 @@ Deep Agents 能力验证 — 7. Streaming
 """
 
 import os
-from deepagents import create_deep_agent
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=r"E:\ai-project\poc-demo\.env")
+from deepagents import create_deep_agent, register_provider_profile, ProviderProfile
 
+register_provider_profile(
+    "openai:Minimax-M2.7",
+    ProviderProfile(init_kwargs={"use_responses_api": False}),
+)
 
 agent = create_deep_agent(
-    model=os.getenv("DEEPAGENTS_MODEL", "ollama:llama3.1"),
+    model=os.getenv("DEEPAGENTS_MODEL", "openai:Minimax-M2.7"),
     system_prompt="你是一个税务分析助手。回答时分步骤说明。",
 )
 

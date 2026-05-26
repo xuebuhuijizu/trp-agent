@@ -8,10 +8,17 @@ Deep Agents 能力验证 — 3. Planning
 """
 
 import os
-from deepagents import create_deep_agent
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=r"E:\ai-project\poc-demo\.env")
+from deepagents import create_deep_agent, register_provider_profile, ProviderProfile
+
+register_provider_profile(
+    "openai:Minimax-M2.7",
+    ProviderProfile(init_kwargs={"use_responses_api": False}),
+)
 
 agent = create_deep_agent(
-    model=os.getenv("DEEPAGENTS_MODEL", "ollama:llama3.1"),
+    model=os.getenv("DEEPAGENTS_MODEL", "openai:Minimax-M2.7"),
     system_prompt=(
         "你是一个税务分析助手。面对复杂问题，"
         "先用 write_todos 工具列出执行计划，"
@@ -31,7 +38,7 @@ result = agent.invoke({
     ]
 })
 
-print(result["messages"][-1]["content"])
+print(result["messages"][-1].content)
 """
 预期行为：
 - agent 先调用 write_todos 列出计划项

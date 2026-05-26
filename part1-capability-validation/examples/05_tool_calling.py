@@ -8,7 +8,14 @@ Deep Agents 能力验证 — 5. Tool Calling
 """
 
 import os
-from deepagents import create_deep_agent
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=r"E:\ai-project\poc-demo\.env")
+from deepagents import create_deep_agent, register_provider_profile, ProviderProfile
+
+register_provider_profile(
+    "openai:Minimax-M2.7",
+    ProviderProfile(init_kwargs={"use_responses_api": False}),
+)
 
 
 def calculate_tax(income: float, rate: float) -> dict:
@@ -33,7 +40,7 @@ def get_tax_rate(tax_type: str, income: float) -> float:
 
 
 agent = create_deep_agent(
-    model=os.getenv("DEEPAGENTS_MODEL", "ollama:llama3.1"),
+    model=os.getenv("DEEPAGENTS_MODEL", "openai:Minimax-M2.7"),
     tools=[calculate_tax, get_tax_rate],
     system_prompt="你是一个税务计算助手。使用提供的工具进行精确计算。",
 )
@@ -47,7 +54,7 @@ result = agent.invoke({
     ]
 })
 
-print(result["messages"][-1]["content"])
+print(result["messages"][-1].content)
 """
 预期行为：
 - agent 识别需要调用 get_tax_rate 获取税率

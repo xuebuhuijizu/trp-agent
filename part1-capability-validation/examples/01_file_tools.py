@@ -10,10 +10,17 @@ Deep Agents 能力验证 — 1. File Tools
 """
 
 import os
-from deepagents import create_deep_agent
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=r"E:\ai-project\poc-demo\.env")
+from deepagents import create_deep_agent, register_provider_profile, ProviderProfile
+
+register_provider_profile(
+    "openai:Minimax-M2.7",
+    ProviderProfile(init_kwargs={"use_responses_api": False}),
+)
 
 agent = create_deep_agent(
-    model=os.getenv("DEEPAGENTS_MODEL", "ollama:llama3.1"),  # 可通过环境变量 DEEPAGENTS_MODEL 覆盖
+    model=os.getenv("DEEPAGENTS_MODEL", "openai:Minimax-M2.7"),  # 可通过环境变量 DEEPAGENTS_MODEL 覆盖
     system_prompt="你是一个文件操作助手。使用文件工具完成需求。",
 )
 
@@ -32,7 +39,7 @@ result = agent.invoke({
     ]
 })
 
-print(result["messages"][-1]["content"])
+print(result["messages"][-1].content)
 """
 预期行为：
 - agent 会依次调用 write_file → read_file → grep → edit_file → read_file
