@@ -1,0 +1,48 @@
+[
+  {
+    "scenario_id": "invoice-input-vat-deduction",
+    "title": "发票取得与进项抵扣风险",
+    "keywords": ["发票", "进项税额", "抵扣", "专票"],
+    "audit_focus": "核查发票与业务实质一致性、抵扣用途和不得抵扣情形。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  },
+  {
+    "scenario_id": "revenue-vat-timing",
+    "title": "收入确认与增值税纳税义务发生时间",
+    "keywords": ["收入确认", "增值税", "纳税义务", "开票"],
+    "audit_focus": "核查收入确认时点、开票时点和纳税义务发生时间是否匹配。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  },
+  {
+    "scenario_id": "cost-deduction-risk",
+    "title": "成本费用税前扣除风险",
+    "keywords": ["成本费用", "税前扣除", "发票", "真实性"],
+    "audit_focus": "核查成本费用真实性、相关性、合理性和扣除凭证。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  },
+  {
+    "scenario_id": "tax-incentive-eligibility",
+    "title": "税收优惠适用条件",
+    "keywords": ["优惠", "减免", "小微企业", "高新技术"],
+    "audit_focus": "核查优惠适用条件、期间、备案或留存备查材料。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  },
+  {
+    "scenario_id": "related-party-transaction",
+    "title": "关联交易和转让定价风险",
+    "keywords": ["关联交易", "关联方", "定价", "转让定价"],
+    "audit_focus": "核查交易定价公允性、同期资料和税务调整风险。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  }
+]
+

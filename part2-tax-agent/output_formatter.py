@@ -10,16 +10,31 @@ CITATION_PATTERN = re.compile(r"^[\[【](来源|依据|参考)\s*[:：].+[\]】]
 
 
 class OutputFormatter:
-    def format(self, question: ClassifiedQuestion, answer: str, citations: list[dict] | None = None, tool_events: list[dict] | None = None) -> dict:
+    def format(
+        self,
+        question: ClassifiedQuestion,
+        answer: str,
+        citations: list[dict] | None = None,
+        tool_events: list[dict] | None = None,
+        domain_analysis: dict | None = None,
+        skills: list[str] | None = None,
+    ) -> dict:
         clean_answer = self._strip_reasoning_tags(answer)
         return {
             "question": question.text,
             "intent": question.intent,
             "answer_markdown": self._to_markdown(question, clean_answer),
-            "answer_json": self._to_json(question, clean_answer, citations=citations, tool_events=tool_events),
+            "answer_json": self._to_json(
+                question,
+                clean_answer,
+                citations=citations,
+                tool_events=tool_events,
+                domain_analysis=domain_analysis,
+                skills=skills,
+            ),
         }
 
-    def write_all(self, results: list[dict], output_dir: str | Path):
+    def write_all(self, results: list[dict], output_dir: str | Path, run_id: str | None = None):
         out_dir = Path(output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -31,7 +46,7 @@ class OutputFormatter:
             f.write(self._render_markdown_report(results))
 
         with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(self._render_json_report(results), f, ensure_ascii=False, indent=2)
+            json.dump(self._render_json_report(results, run_id=run_id), f, ensure_ascii=False, indent=2)
 
         return {"markdown": str(md_path), "json": str(json_path)}
 
@@ -53,13 +68,23 @@ class OutputFormatter:
 
 """
 
-    def _to_json(self, question: ClassifiedQuestion, answer: str, citations: list[dict] | None = None, tool_events: list[dict] | None = None) -> dict:
+    def _to_json(
+        self,
+        question: ClassifiedQuestion,
+        answer: str,
+        citations: list[dict] | None = None,
+        tool_events: list[dict] | None = None,
+        domain_analysis: dict | None = None,
+        skills: list[str] | None = None,
+    ) -> dict:
         return {
             "question": question.text,
             "intent": question.intent,
             "answer": answer,
             "citations": citations if citations is not None else self._extract_citations(answer),
             "tool_events": tool_events or [],
+            "skills": skills or [],
+            "domain_analysis": domain_analysis or {},
         }
 
     @staticmethod
@@ -77,11 +102,12 @@ class OutputFormatter:
         return "\n".join(lines)
 
     @staticmethod
-    def _render_json_report(results: list[dict]) -> dict:
+    def _render_json_report(results: list[dict], run_id: str | None = None) -> dict:
         return {
             "report_meta": {
                 "generated_at": datetime.now().isoformat(),
                 "total_questions": len(results),
+                "run_id": run_id,
             },
             "answers": [r["answer_json"] for r in results],
         }

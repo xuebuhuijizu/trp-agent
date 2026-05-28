@@ -1,0 +1,39 @@
+[
+  {
+    "case_id": "case-input-vat-001",
+    "title": "取得专票后进项税额能否抵扣",
+    "scenario_id": "invoice-input-vat-deduction",
+    "question": "公司取得增值税专用发票后是否可以抵扣进项税额？",
+    "keywords": ["发票", "进项税额", "抵扣", "增值税"],
+    "reference": "需核查发票合规性、用途是否属于不得抵扣项目以及认证抵扣时点。",
+    "reuse_boundary": "仅能复用检查框架，不能替代当前业务真实性判断。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  },
+  {
+    "case_id": "case-revenue-vat-001",
+    "title": "先收款后开票的增值税纳税义务判断",
+    "scenario_id": "revenue-vat-timing",
+    "question": "先收款后开票时增值税纳税义务何时发生？",
+    "keywords": ["收入确认", "增值税", "纳税义务", "开票"],
+    "reference": "需结合合同约定、服务交付、收款和开票时点判断。",
+    "reuse_boundary": "不同交易类型的纳税义务发生时间规则不同。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  },
+  {
+    "case_id": "case-cost-deduction-001",
+    "title": "缺少合规发票的费用扣除风险",
+    "scenario_id": "cost-deduction-risk",
+    "question": "没有发票的费用能否企业所得税税前扣除？",
+    "keywords": ["成本费用", "税前扣除", "发票"],
+    "reference": "需核查支出真实性、扣除凭证和税前扣除政策口径。",
+    "reuse_boundary": "不能仅因无发票直接得出全部不得扣除结论。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  }
+]
+

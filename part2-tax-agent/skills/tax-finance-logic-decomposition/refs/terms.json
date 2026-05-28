@@ -1,0 +1,75 @@
+[
+  {
+    "term": "增值税",
+    "aliases": ["VAT"],
+    "category": "tax_type",
+    "logic_hint": "判断交易是否属于增值税应税行为，并确认纳税义务发生时间、税率和抵扣链条。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  },
+  {
+    "term": "企业所得税",
+    "aliases": ["所得税"],
+    "category": "tax_type",
+    "logic_hint": "判断收入、成本费用和纳税调整事项是否影响应纳税所得额。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  },
+  {
+    "term": "进项税额",
+    "aliases": ["进项抵扣", "抵扣"],
+    "category": "vat_credit",
+    "logic_hint": "核查发票合法性、用途、认证抵扣时点和不得抵扣情形。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  },
+  {
+    "term": "销项税额",
+    "aliases": ["销项"],
+    "category": "vat_output",
+    "logic_hint": "核查销售额、税率和纳税义务发生时间。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  },
+  {
+    "term": "发票",
+    "aliases": ["专票", "普票"],
+    "category": "voucher",
+    "logic_hint": "核查发票真实性、合规性、开票内容和业务实质一致性。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  },
+  {
+    "term": "收入确认",
+    "aliases": ["确认收入"],
+    "category": "accounting_timing",
+    "logic_hint": "核查收入确认时点与税法纳税义务发生时间是否一致。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  },
+  {
+    "term": "成本费用",
+    "aliases": ["费用扣除", "税前扣除"],
+    "category": "deduction",
+    "logic_hint": "核查真实性、相关性、合理性和扣除凭证。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  },
+  {
+    "term": "纳税调整",
+    "aliases": ["调增", "调减"],
+    "category": "income_tax_adjustment",
+    "logic_hint": "识别会计处理与税法口径差异，并判断是否需要调增或调减。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  }
+]
+

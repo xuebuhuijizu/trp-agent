@@ -246,12 +246,16 @@ class TestAgentExecutor:
         assert deepagents_calls[0]["model"].model == "ollama:test"
         assert "税务顾问专家" in deepagents_calls[0]["system_prompt"]
         assert "tools" in deepagents_calls[0]
-        assert deepagents_calls[0]["tools"][0].__name__ == "retrieve_tax_context"
+        assert {tool.__name__ for tool in deepagents_calls[0]["tools"]} == {
+            "retrieve_tax_context",
+            "analyze_tax_question",
+        }
         assert deepagents_calls[0]["skills"] == ["/skills"]
         assert deepagents_calls[0]["memory"] == ["/memories/AGENTS.md"]
         assert deepagents_calls[0]["backend"].__class__.__name__ == "FilesystemBackend"
         assert deepagents_calls[0]["backend"].virtual_mode is True
         assert deepagents_calls[0]["response_format"].__name__ == "TaxAnswer"
+        assert "checkpointer" in deepagents_calls[0]
 
     def test_execute_builds_prompt_and_returns_last_message(self):
         class FakeAgent:
@@ -332,12 +336,12 @@ class TestAgentExecutor:
 
 def test_deepagents_skill_and_memory_files_exist():
     root = Path(__file__).resolve().parents[1]
-    skill = root / "skills" / "tax-answering" / "SKILL.md"
+    skill = root / "skills" / "solution-generation" / "SKILL.md"
     memory = root / "memories" / "AGENTS.md"
 
     assert skill.exists()
     assert memory.exists()
-    assert "税务回答" in skill.read_text(encoding="utf-8")
+    assert "解决方案生成" in skill.read_text(encoding="utf-8")
     assert "中国税务场景" in memory.read_text(encoding="utf-8")
 
 

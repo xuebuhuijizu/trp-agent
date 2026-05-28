@@ -1,0 +1,33 @@
+[
+  {
+    "intent_id": "deduction-eligibility-challenge",
+    "title": "扣除或抵扣资格质询",
+    "triggers": ["能否", "是否可以", "抵扣", "税前扣除"],
+    "hypothesis": "提问者可能在确认某项支出或税额是否满足抵扣/扣除条件。",
+    "alternative": "也可能是在确认资料准备要求，而非直接判断资格。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  },
+  {
+    "intent_id": "tax-risk-assessment",
+    "title": "税务风险评估质询",
+    "triggers": ["风险", "合规", "需要申报", "会不会"],
+    "hypothesis": "提问者可能在识别交易或处理方式是否存在税务合规风险。",
+    "alternative": "也可能是在寻找申报流程或资料清单。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  },
+  {
+    "intent_id": "timing-and-recognition",
+    "title": "时点和确认口径质询",
+    "triggers": ["什么时候", "何时", "收入确认", "纳税义务"],
+    "hypothesis": "提问者可能在确认会计确认时点和税法纳税义务时点是否一致。",
+    "alternative": "也可能是在确认发票开具时点。",
+    "source_type": "demo_seed",
+    "version": "2026-05-28",
+    "review_status": "unreviewed"
+  }
+]
+

@@ -6,7 +6,9 @@ from pydantic import BaseModel, Field
 from langchain.chat_models import init_chat_model
 from deepagents.backends import FilesystemBackend
 
+from audit_trace import build_checkpoint_config, CheckpointConfig
 from config import AgentConfig
+from domain_knowledge import analyze_tax_question
 from intent_classifier import ClassifiedQuestion
 from tax_retrieval import extract_citations_from_messages, retrieve_tax_context
 
@@ -49,15 +51,18 @@ class ExecutionResult:
     answer: str
     citations: list[dict] = field(default_factory=list)
     tool_events: list[dict] = field(default_factory=list)
+    domain_analysis: dict = field(default_factory=dict)
+    skills: list[str] = field(default_factory=list)
 
 
 class AgentExecutor:
-    def __init__(self, config: AgentConfig, agent=None):
+    def __init__(self, config: AgentConfig, agent=None, checkpoint_config: CheckpointConfig | None = None):
         self._config = config
-        self._agent = agent or self.build_agent(config)
+        self._checkpoint_config = checkpoint_config or build_checkpoint_config(config.output_dir)
+        self._agent = agent or self.build_agent(config, checkpointer=self._checkpoint_config.checkpointer)
 
     @staticmethod
-    def build_agent(config: AgentConfig):
+    def build_agent(config: AgentConfig, checkpointer=None):
         from deepagents import create_deep_agent
 
         model = init_chat_model(
@@ -68,11 +73,12 @@ class AgentExecutor:
         return create_deep_agent(
             model=model,
             system_prompt=TAX_SYSTEM_PROMPT,
-            tools=[retrieve_tax_context],
+            tools=[retrieve_tax_context, analyze_tax_question],
             skills=SKILL_SOURCES,
             memory=MEMORY_SOURCES,
             backend=FilesystemBackend(root_dir=PART2_ROOT, virtual_mode=True),
             response_format=TaxAnswer,
+            checkpointer=checkpointer,
         )
 
     async def execute(self, question: ClassifiedQuestion, plan_steps: list[str] | None = None) -> str:
@@ -80,20 +86,29 @@ class AgentExecutor:
             return (await self.execute_with_evidence(question)).answer
 
         prompt = self._build_prompt(question, plan_steps)
-        result = await self._agent.ainvoke({"messages": [{"role": "user", "content": prompt}]})
+        result = await self._ainvoke({"messages": [{"role": "user", "content": prompt}]})
         return self._last_content(result["messages"])
 
     async def execute_with_evidence(self, question: ClassifiedQuestion) -> ExecutionResult:
         prompt = self._build_native_prompt(question)
-        result = await self._agent.ainvoke({"messages": [{"role": "user", "content": prompt}]})
+        result = await self._ainvoke({"messages": [{"role": "user", "content": prompt}]})
         messages = result["messages"]
         structured_answer, structured_citations = self._structured_result(result)
         citations = structured_citations or extract_citations_from_messages(messages)
+        domain_analysis = analyze_tax_question(question.text)
         return ExecutionResult(
             answer=structured_answer or self._last_content(messages),
             citations=citations,
             tool_events=self._collect_tool_events(messages),
+            domain_analysis=domain_analysis,
+            skills=self._skills_from_domain_analysis(domain_analysis),
         )
+
+    async def _ainvoke(self, payload: dict) -> dict:
+        try:
+            return await self._agent.ainvoke(payload, config=self._checkpoint_config.invoke_config)
+        except TypeError:
+            return await self._agent.ainvoke(payload)
 
     @staticmethod
     def _build_prompt(question: ClassifiedQuestion, plan_steps: list[str]) -> str:
@@ -121,7 +136,8 @@ class AgentExecutor:
 1. 对需要多步判断的问题，使用 write_todos 拆解并跟踪任务。
 2. 需要法规依据、政策来源或税务定义时，调用 retrieve_tax_context。
 3. 回答必须结构化，并引用检索工具返回的 source_id/title。
-4. 不要输出 <think>...</think> 或其他内部推理标签。"""
+4. 对税审问题使用 analyze_tax_question 获取术语、场景、历史问题和质询意图分析。
+5. 不要输出 <think>...</think> 或其他内部推理标签。"""
 
     @staticmethod
     def _last_content(messages: list[Any]) -> str:
@@ -139,6 +155,21 @@ class AgentExecutor:
                 continue
             events.append({"name": name})
         return events
+
+    @staticmethod
+    def _skills_from_domain_analysis(domain_analysis: dict) -> list[str]:
+        skills = []
+        if domain_analysis.get("intent_hypotheses"):
+            skills.append("audit-intent-inference")
+        if domain_analysis.get("terms"):
+            skills.append("tax-finance-logic-decomposition")
+        if domain_analysis.get("scenario_matches"):
+            skills.append("audit-scenario-recognition")
+        if domain_analysis.get("historical_references"):
+            skills.append("historical-question-matching")
+        if domain_analysis.get("scenario_matches") or domain_analysis.get("historical_references"):
+            skills.append("solution-generation")
+        return skills
 
     @staticmethod
     def _structured_result(result: dict) -> tuple[str, list[dict]]:
