@@ -9,11 +9,10 @@ Deep Agents 能力验证 — 5. Tool Calling
 
 import os
 from dotenv import load_dotenv
-load_dotenv(dotenv_path=r"E:\ai-project\poc-demo\.env")
+load_dotenv()
 from deepagents import create_deep_agent, register_provider_profile, ProviderProfile
 
-register_provider_profile(
-    "openai:Minimax-M2.7",
+register_provider_profile("openai",
     ProviderProfile(init_kwargs={"use_responses_api": False}),
 )
 
@@ -40,7 +39,7 @@ def get_tax_rate(tax_type: str, income: float) -> float:
 
 
 agent = create_deep_agent(
-    model=os.getenv("DEEPAGENTS_MODEL", "openai:Minimax-M2.7"),
+    model=os.getenv("DEEPAGENTS_MODEL", "openai:gpt-4o"),
     tools=[calculate_tax, get_tax_rate],
     system_prompt="你是一个税务计算助手。使用提供的工具进行精确计算。",
 )

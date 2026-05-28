@@ -11,16 +11,15 @@ Deep Agents 能力验证 — 1. File Tools
 
 import os
 from dotenv import load_dotenv
-load_dotenv(dotenv_path=r"E:\ai-project\poc-demo\.env")
+load_dotenv()
 from deepagents import create_deep_agent, register_provider_profile, ProviderProfile
 
-register_provider_profile(
-    "openai:Minimax-M2.7",
+register_provider_profile("openai",
     ProviderProfile(init_kwargs={"use_responses_api": False}),
 )
 
 agent = create_deep_agent(
-    model=os.getenv("DEEPAGENTS_MODEL", "openai:Minimax-M2.7"),  # 可通过环境变量 DEEPAGENTS_MODEL 覆盖
+    model=os.getenv("DEEPAGENTS_MODEL", "openai:gpt-4o"),  # 可通过环境变量 DEEPAGENTS_MODEL 覆盖
     system_prompt="你是一个文件操作助手。使用文件工具完成需求。",
 )
 

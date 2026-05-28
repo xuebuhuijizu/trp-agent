@@ -7,11 +7,10 @@
 import asyncio
 import argparse
 from dotenv import load_dotenv
-load_dotenv(dotenv_path=r"E:\ai-project\poc-demo\.env")
+load_dotenv()
 from deepagents import register_provider_profile, ProviderProfile
 
-register_provider_profile(
-    "openai:Minimax-M2.7",
+register_provider_profile("openai",
     ProviderProfile(init_kwargs={"use_responses_api": False}),
 )
 
@@ -26,7 +25,7 @@ async def main():
     parser = argparse.ArgumentParser(description="税务智能问答 Agent")
     parser.add_argument("--input", "-i", default="input.docx", help="输入 Word 文件路径")
     parser.add_argument("--output", "-o", default="./output", help="输出目录")
-    parser.add_argument("--model", "-m", default="openai:Minimax-M2.7", help="LLM 模型")
+    parser.add_argument("--model", "-m", default=os.getenv("DEEPAGENTS_MODEL", "openai:gpt-4o"), help="LLM 模型")
     args = parser.parse_args()
 
     config = AgentConfig(

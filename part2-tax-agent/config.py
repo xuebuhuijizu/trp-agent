@@ -4,7 +4,7 @@ from typing import Optional
 
 @dataclass
 class AgentConfig:
-    model: str = "openai:Minimax-M2.7"
+    model: str = "openai:gpt-4o"
     input_file: str = "input.docx"
     output_dir: str = "output"
     temperature: float = 0.1

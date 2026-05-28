@@ -10,16 +10,15 @@ Deep Agents 能力验证 — 8. Event Streaming
 
 import os
 from dotenv import load_dotenv
-load_dotenv(dotenv_path=r"E:\ai-project\poc-demo\.env")
+load_dotenv()
 from deepagents import create_deep_agent, register_provider_profile, ProviderProfile
 
-register_provider_profile(
-    "openai:Minimax-M2.7",
+register_provider_profile("openai",
     ProviderProfile(init_kwargs={"use_responses_api": False}),
 )
 
 agent = create_deep_agent(
-    model=os.getenv("DEEPAGENTS_MODEL", "openai:Minimax-M2.7"),
+    model=os.getenv("DEEPAGENTS_MODEL", "openai:gpt-4o"),
     subagents=[
         {
             "name": "tax-policy-researcher",

@@ -9,7 +9,7 @@ Deep Agents 能力验证 — 4. Memory
 
 import os
 from dotenv import load_dotenv
-load_dotenv(dotenv_path=r"E:\ai-project\poc-demo\.env")
+load_dotenv()
 from deepagents import create_deep_agent, register_provider_profile, ProviderProfile
 from deepagents.backends import CompositeBackend, StateBackend, StoreBackend
 from deepagents.backends.utils import create_file_data
@@ -17,8 +17,7 @@ from langgraph.store.memory import InMemoryStore
 
 
 
-register_provider_profile(
-    "openai:Minimax-M2.7",
+register_provider_profile("openai",
     ProviderProfile(init_kwargs={"use_responses_api": False}),
 )
 
@@ -48,7 +47,7 @@ memory_backend = CompositeBackend(
 
 
 agent = create_deep_agent(
-    model=os.getenv("DEEPAGENTS_MODEL", "openai:Minimax-M2.7"),
+    model=os.getenv("DEEPAGENTS_MODEL", "openai:gpt-4o"),
     system_prompt="你是一个税务顾问。读取长期记忆后回答用户问题。",
     memory=["/memories/AGENTS.md"],
     backend=memory_backend,
