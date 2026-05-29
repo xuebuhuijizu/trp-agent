@@ -164,6 +164,20 @@ def test_langfuse_observability_fails_clearly_when_dependency_missing(monkeypatc
         build_langfuse_observability(enabled=True)
 
 
+def test_langfuse_check_script_masks_secret_values(monkeypatch):
+    import check_langfuse_observability as langfuse_check
+
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-lf-1234567890")
+    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-lf-abcdefghij")
+    monkeypatch.setenv("LANGFUSE_BASE_URL", "http://localhost:3000")
+
+    results = langfuse_check._check_required_env()
+
+    assert all(result.ok for result in results)
+    assert "abcdefghij" not in results[1].detail
+    assert results[2].detail == "http://localhost:3000"
+
+
 def test_batch_processor_uses_explicit_batch_route(tmp_path):
     from tax_agent.service.batch_runtime import BatchProcessor, BatchRequest
 

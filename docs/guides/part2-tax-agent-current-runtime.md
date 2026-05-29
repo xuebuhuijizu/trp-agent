@@ -90,6 +90,7 @@ app.py
 | `tax_agent/io/*` | 文件输入和报告输出 | batch 主路径 | 只服务 CLI / `/batch` |
 | `tax_agent/runtime/audit_trace.py` | 旧本地 trace recorder | 兼容 | F003 产物，Langfuse 替换前保留，不参与当前主调用 |
 | `tax_agent/legacy/*` | 历史实验代码 | 否 | 只保留对比和兼容测试，不应被新主流程引用 |
+| `check_langfuse_observability.py` | 运维验证脚本 | 否 | 验证本地 Langfuse health、auth 和 callback adapter |
 | `check_sqlite_checkpoint_persistence.py` | 运维验证脚本 | 否 | 验证 SQLite checkpoint 跨进程恢复 |
 | `check_opengauss_compat.py` | 运维验证脚本 | 否 | 记录 OpenGauss 与 LangGraph checkpoint 兼容性 |
 
