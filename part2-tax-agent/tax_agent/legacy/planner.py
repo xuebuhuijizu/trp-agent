@@ -6,7 +6,7 @@ is kept for compatibility tests and historical examples, not for the main path.
 
 from typing import Protocol
 
-from intent_classifier import ClassifiedQuestion
+from tax_agent.domain.intent_classifier import ClassifiedQuestion
 
 
 class PlannerAdapter(Protocol):

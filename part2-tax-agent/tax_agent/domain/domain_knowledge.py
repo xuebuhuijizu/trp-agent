@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any
 
 
-PART2_ROOT = Path(__file__).resolve().parent
+PART2_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _load_json(path: Path) -> Any:

@@ -1,8 +1,7 @@
 import json
 from pathlib import Path
 
-from audit_trace import AuditTraceRecorder, build_checkpoint_config
-from domain_knowledge import (
+from tax_agent.domain.domain_knowledge import (
     analyze_tax_question,
     load_audit_scenarios,
     load_historical_questions,
@@ -11,6 +10,7 @@ from domain_knowledge import (
     match_historical_questions,
     match_tax_terms,
 )
+from tax_agent.runtime.audit_trace import AuditTraceRecorder, build_checkpoint_config
 
 
 ROOT = Path(__file__).resolve().parents[1]

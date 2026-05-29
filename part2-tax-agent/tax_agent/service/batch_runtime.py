@@ -3,10 +3,10 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from conversation import ConversationMessage, ConversationRequest
-from intent_classifier import ClassifiedQuestion, IntentClassifier
-from output_formatter import OutputFormatter
-from question_extractor import extract_questions
+from tax_agent.domain.intent_classifier import ClassifiedQuestion, IntentClassifier
+from tax_agent.io.output_formatter import OutputFormatter
+from tax_agent.io.question_extractor import extract_questions
+from tax_agent.runtime.conversation import ConversationMessage, ConversationRequest
 
 
 class BatchRequest(BaseModel):

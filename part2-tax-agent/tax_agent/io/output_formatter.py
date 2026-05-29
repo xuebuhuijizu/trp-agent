@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 from datetime import datetime
 
-from intent_classifier import ClassifiedQuestion
+from tax_agent.domain.intent_classifier import ClassifiedQuestion
 
 
 CITATION_PATTERN = re.compile(r"^[\[【](来源|依据|参考)\s*[:：].+[\]】]$")

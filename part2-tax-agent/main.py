@@ -15,9 +15,9 @@ register_provider_profile("openai",
     ProviderProfile(init_kwargs={"use_responses_api": False}),
 )
 
-from config import AgentConfig
-from batch_runtime import BatchProcessor, BatchRequest
-from agent_executor import AgentExecutor
+from tax_agent.config import AgentConfig
+from tax_agent.runtime.agent_executor import AgentExecutor
+from tax_agent.service.batch_runtime import BatchProcessor, BatchRequest
 
 
 async def main():

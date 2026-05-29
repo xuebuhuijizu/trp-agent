@@ -7,12 +7,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from intent_classifier import IntentClassifier, ClassifiedQuestion
-from planner import Planner, DefaultPlanner
-from question_extractor import extract_questions, _split_questions
-from output_formatter import OutputFormatter
-from rag_decorator import RAGDecorator, NoopRAG
-from config import AgentConfig
+from tax_agent.config import AgentConfig
+from tax_agent.domain.intent_classifier import ClassifiedQuestion, IntentClassifier
+from tax_agent.io.output_formatter import OutputFormatter
+from tax_agent.io.question_extractor import _split_questions, extract_questions
+from tax_agent.legacy.planner import DefaultPlanner, Planner
+from tax_agent.legacy.rag_decorator import NoopRAG, RAGDecorator
 
 
 class TestQuestionExtractor:
@@ -234,7 +234,7 @@ class TestAgentExecutor:
             "deepagents.backends",
             SimpleNamespace(FilesystemBackend=FilesystemBackend),
         )
-        agent_executor = importlib.import_module("agent_executor")
+        agent_executor = importlib.import_module("tax_agent.runtime.agent_executor")
 
         config = AgentConfig(model="ollama:test", temperature=0.2, max_tokens=1234)
         executor = agent_executor.AgentExecutor(config)
@@ -267,7 +267,7 @@ class TestAgentExecutor:
                 return {"messages": [{"content": "first"}, {"content": "final answer"}]}
 
         fake_agent = FakeAgent()
-        agent_executor = importlib.import_module("agent_executor")
+        agent_executor = importlib.import_module("tax_agent.runtime.agent_executor")
         executor = agent_executor.AgentExecutor(AgentConfig(), agent=fake_agent)
         question = ClassifiedQuestion(text="什么是增值税", intent="definition")
 
@@ -298,7 +298,7 @@ class TestAgentExecutor:
                 }
 
         fake_agent = FakeAgent()
-        agent_executor = importlib.import_module("agent_executor")
+        agent_executor = importlib.import_module("tax_agent.runtime.agent_executor")
         executor = agent_executor.AgentExecutor(AgentConfig(), agent=fake_agent)
         question = ClassifiedQuestion(text="什么是增值税", intent="definition")
 
@@ -324,7 +324,7 @@ class TestAgentExecutor:
                     },
                 }
 
-        agent_executor = importlib.import_module("agent_executor")
+        agent_executor = importlib.import_module("tax_agent.runtime.agent_executor")
         executor = agent_executor.AgentExecutor(AgentConfig(), agent=FakeAgent())
         question = ClassifiedQuestion(text="什么是增值税", intent="definition")
 

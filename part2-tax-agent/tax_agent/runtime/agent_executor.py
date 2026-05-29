@@ -3,17 +3,16 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
-from deepagents.backends import FilesystemBackend
 
-from audit_trace import build_checkpoint_config, CheckpointConfig
-from config import AgentConfig
-from conversation import ConversationRequest
-from domain_knowledge import analyze_tax_context, analyze_tax_question
-from intent_classifier import ClassifiedQuestion
-from observability import build_langfuse_observability
-from tax_retrieval import extract_citations_from_messages, retrieve_tax_context
+from tax_agent.config import AgentConfig
+from tax_agent.domain.domain_knowledge import analyze_tax_context, analyze_tax_question
+from tax_agent.domain.intent_classifier import ClassifiedQuestion
+from tax_agent.domain.tax_retrieval import extract_citations_from_messages, retrieve_tax_context
+from tax_agent.runtime.audit_trace import CheckpointConfig, build_checkpoint_config
+from tax_agent.runtime.conversation import ConversationRequest
+from tax_agent.runtime.observability import build_langfuse_observability
 
-PART2_ROOT = Path(__file__).resolve().parent
+PART2_ROOT = Path(__file__).resolve().parents[2]
 SKILL_SOURCES = ["/skills"]
 MEMORY_SOURCES = ["/memories/AGENTS.md"]
 
@@ -89,6 +88,7 @@ class AgentExecutor:
     @staticmethod
     def build_agent(config: AgentConfig, checkpointer=None):
         from deepagents import create_deep_agent
+        from deepagents.backends import FilesystemBackend
         from langchain.chat_models import init_chat_model
 
         model = init_chat_model(
