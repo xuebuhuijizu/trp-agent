@@ -7,6 +7,7 @@
 import asyncio
 import argparse
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 from deepagents import register_provider_profile, ProviderProfile
@@ -22,7 +23,7 @@ from tax_agent.service.batch_runtime import BatchProcessor, BatchRequest
 
 async def main():
     parser = argparse.ArgumentParser(description="税务智能问答 Agent")
-    parser.add_argument("--input", "-i", default="sample_input.txt", help="输入文件路径（支持 .txt / .docx）")
+    parser.add_argument("--input", "-i", default=str(Path(__file__).resolve().parent / "sample_input.txt"), help="输入文件路径（支持 .txt / .docx）")
     parser.add_argument("--output", "-o", default="./output", help="输出目录")
     parser.add_argument("--model", "-m", default=os.getenv("DEEPAGENTS_MODEL", "openai:gpt-4o"), help="LLM 模型")
     parser.add_argument("--session-id", default="cli-batch", help="批处理 session_id")
@@ -36,7 +37,7 @@ async def main():
     )
 
     print("[1/3] 初始化 Agent runtime...")
-    executor = AgentExecutor(config)
+    executor = await AgentExecutor.create(config)
     processor = BatchProcessor(executor)
     request = BatchRequest(
         session_id=args.session_id,

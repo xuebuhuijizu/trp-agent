@@ -9,7 +9,11 @@ from tax_agent.config import AgentConfig
 from tax_agent.domain.domain_knowledge import analyze_tax_context, analyze_tax_question
 from tax_agent.domain.intent_classifier import ClassifiedQuestion
 from tax_agent.domain.tax_retrieval import extract_citations_from_messages, retrieve_tax_context
-from tax_agent.runtime.audit_trace import CheckpointConfig, build_checkpoint_config
+from tax_agent.runtime.audit_trace import (
+    CheckpointConfig,
+    build_async_checkpoint_config,
+    build_checkpoint_config,
+)
 from tax_agent.runtime.conversation import ConversationRequest
 from tax_agent.runtime.observability import build_langfuse_observability
 from tax_agent.runtime.stream_events import normalize_stream_event
@@ -63,13 +67,24 @@ class ExecutionResult:
 class AgentExecutor:
     def __init__(self, config: AgentConfig, agent=None, checkpoint_config: CheckpointConfig | None = None):
         self._config = config
-        self._checkpoint_config = checkpoint_config or build_checkpoint_config(
+        self._checkpoint_config = checkpoint_config
+        self._observability = build_langfuse_observability(config.langfuse_enabled)
+        if self._checkpoint_config is None:
+            self._checkpoint_config = build_checkpoint_config(
+                config.output_dir,
+                backend_type=config.checkpoint_backend,
+                dsn=config.opengauss_dsn,
+            )
+        self._agent = agent or self.build_agent(config, checkpointer=self._checkpoint_config.checkpointer)
+
+    @classmethod
+    async def create(cls, config: AgentConfig) -> "AgentExecutor":
+        checkpoint_config = await build_async_checkpoint_config(
             config.output_dir,
             backend_type=config.checkpoint_backend,
             dsn=config.opengauss_dsn,
         )
-        self._observability = build_langfuse_observability(config.langfuse_enabled)
-        self._agent = agent or self.build_agent(config, checkpointer=self._checkpoint_config.checkpointer)
+        return cls(config, checkpoint_config=checkpoint_config)
 
     @property
     def output_dir(self) -> str:
