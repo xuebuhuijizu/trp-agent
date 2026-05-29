@@ -12,6 +12,7 @@ dependencies = [
     "uvicorn>=0.32",
     "langfuse>=3.0",
     "langgraph-checkpoint-sqlite>=3.0",
+    "aiosqlite>=0.20",
     "langgraph-checkpoint-postgres>=3.0",
     "psycopg[binary]>=3.2",
 ]
