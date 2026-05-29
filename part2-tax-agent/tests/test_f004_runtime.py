@@ -1,4 +1,5 @@
 import asyncio
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -122,6 +123,45 @@ def test_service_default_port_is_3004():
     from service_app import DEFAULT_API_PORT
 
     assert DEFAULT_API_PORT == 3004
+
+
+def test_service_app_reports_missing_fastapi_dependency(monkeypatch):
+    from service_app import create_app
+
+    monkeypatch.setitem(sys.modules, "fastapi", None)
+    with pytest.raises(RuntimeError, match="fastapi and uvicorn"):
+        create_app()
+
+
+def test_agent_config_reads_environment_at_instantiation(monkeypatch):
+    monkeypatch.setenv("CHECKPOINT_BACKEND", "opengauss")
+    monkeypatch.setenv("OPENGAUSS_DSN", "postgresql://u:p@localhost:5432/db")
+    monkeypatch.setenv("LANGFUSE_ENABLED", "1")
+    monkeypatch.setenv("TAX_AGENT_SERVICE_PORT", "3004")
+
+    config = AgentConfig()
+
+    assert config.checkpoint_backend == "opengauss"
+    assert config.opengauss_dsn == "postgresql://u:p@localhost:5432/db"
+    assert config.langfuse_enabled is True
+    assert config.service_port == 3004
+
+
+def test_langfuse_observability_disabled_by_default():
+    from observability import build_langfuse_observability
+
+    observability = build_langfuse_observability(enabled=False)
+
+    assert observability.provider == "none"
+    assert observability.callbacks == []
+
+
+def test_langfuse_observability_fails_clearly_when_dependency_missing(monkeypatch):
+    from observability import build_langfuse_observability
+
+    monkeypatch.setitem(sys.modules, "langfuse", None)
+    with pytest.raises(RuntimeError, match="langfuse package"):
+        build_langfuse_observability(enabled=True)
 
 
 def test_batch_processor_uses_explicit_batch_route(tmp_path):

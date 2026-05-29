@@ -173,6 +173,7 @@ class AgentExecutor:
 
     @staticmethod
     def _build_prompt(question: ClassifiedQuestion, plan_steps: list[str]) -> str:
+        """Legacy static-plan prompt used only by execute(..., plan_steps=...)."""
         plan_text = "\n".join(f"{i+1}. {step}" for i, step in enumerate(plan_steps))
         return f"""请回答以下税务问题。
 

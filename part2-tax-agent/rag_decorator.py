@@ -1,6 +1,7 @@
-"""RAG 装饰器 — 为未来接入检索增强生成预留接口。
+"""Legacy RAG decorator.
 
-当前为桩实现（no-op），后期替换为真实 RAG 检索逻辑。
+F004/F002 main paths use the `retrieve_tax_context` tool. This no-op adapter is
+kept for compatibility tests and historical examples, not for the main path.
 """
 
 from typing import Protocol

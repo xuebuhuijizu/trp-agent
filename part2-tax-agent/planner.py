@@ -1,3 +1,9 @@
+"""Legacy static planner.
+
+F004 uses DeepAgents native planning through the multi-turn runtime. This module
+is kept for compatibility tests and historical examples, not for the main path.
+"""
+
 from typing import Protocol
 
 from intent_classifier import ClassifiedQuestion

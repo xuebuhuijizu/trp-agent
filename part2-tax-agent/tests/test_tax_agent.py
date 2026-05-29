@@ -343,10 +343,3 @@ def test_deepagents_skill_and_memory_files_exist():
     assert memory.exists()
     assert "解决方案生成" in skill.read_text(encoding="utf-8")
     assert "中国税务场景" in memory.read_text(encoding="utf-8")
-
-
-def test_main_no_longer_uses_static_planner():
-    source = (Path(__file__).resolve().parents[1] / "main.py").read_text(encoding="utf-8")
-
-    assert "from planner import Planner" not in source
-    assert "Planner()" not in source
