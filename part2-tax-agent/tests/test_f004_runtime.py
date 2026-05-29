@@ -1,0 +1,172 @@
+import asyncio
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from agent_executor import AgentExecutor
+from audit_trace import build_checkpoint_config
+from config import AgentConfig
+from conversation import ConversationMessage, ConversationRequest
+from domain_knowledge import analyze_tax_context
+
+
+class FakeAgent:
+    def __init__(self, result):
+        self.result = result
+        self.payload = None
+        self.config = None
+
+    async def ainvoke(self, payload, config=None):
+        self.payload = payload
+        self.config = config
+        return self.result
+
+
+def test_conversation_request_converts_messages_for_agent():
+    request = ConversationRequest(
+        session_id="sess-1",
+        trace_id="trace-1",
+        thread_id="thread-1",
+        messages=[
+            ConversationMessage(role="user", content="解释增值税"),
+            ConversationMessage(role="assistant", content="需要看业务类型"),
+        ],
+    )
+
+    assert request.to_agent_messages() == [
+        {"role": "user", "content": "解释增值税"},
+        {"role": "assistant", "content": "需要看业务类型"},
+    ]
+
+
+def test_analyze_tax_context_uses_previous_turns():
+    analysis = analyze_tax_context(
+        [
+            {"role": "user", "content": "我们先讨论增值税。"},
+            {"role": "assistant", "content": "可以。"},
+            {"role": "user", "content": "那进项税额呢？"},
+        ]
+    )
+
+    terms = {match["term"] for match in analysis["terms"]}
+    assert {"增值税", "进项税额"}.issubset(terms)
+
+
+def test_execute_turn_passes_messages_and_thread_id_to_agent():
+    agent = FakeAgent(
+        {
+            "messages": [
+                {"role": "assistant", "content": "fallback"},
+                {"role": "user", "content": "not the answer"},
+            ],
+            "structured_response": {
+                "question": "那进项税额呢？",
+                "intent": "compliance",
+                "answer": "structured answer",
+                "citations": [{"source_id": "vat-regulation", "title": "增值税暂行条例"}],
+            },
+        }
+    )
+    executor = AgentExecutor(AgentConfig(), agent=agent)
+    request = ConversationRequest(
+        session_id="sess-1",
+        trace_id="trace-1",
+        thread_id="thread-abc",
+        messages=[
+            ConversationMessage(role="user", content="我们先讨论增值税。"),
+            ConversationMessage(role="assistant", content="可以。"),
+            ConversationMessage(role="user", content="那进项税额呢？"),
+        ],
+    )
+
+    result = asyncio.run(executor.execute_turn(request))
+
+    assert agent.payload == {"messages": request.to_agent_messages()}
+    assert agent.config["configurable"]["thread_id"] == "thread-abc"
+    assert agent.config["metadata"]["session_id"] == "sess-1"
+    assert agent.config["metadata"]["trace_id"] == "trace-1"
+    assert result.answer == "structured answer"
+    assert result.thread_id == "thread-abc"
+    assert {"增值税", "进项税额"}.issubset({match["term"] for match in result.domain_analysis["terms"]})
+
+
+def test_opengauss_checkpoint_does_not_fallback_when_dependency_missing(tmp_path, monkeypatch):
+    import builtins
+    original_import = builtins.__import__
+
+    def mock_import(name, *args, **kwargs):
+        if "langgraph.checkpoint.postgres" in name:
+            raise ImportError("Mocked: langgraph-checkpoint-postgres not installed")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", mock_import)
+    with pytest.raises(RuntimeError, match="langgraph-checkpoint-postgres"):
+        build_checkpoint_config(
+            output_dir=tmp_path,
+            backend_type="opengauss",
+            dsn="postgresql://user:password@localhost:5432/postgres",
+        )
+
+
+def test_sse_event_renderer_outputs_stable_protocol():
+    from sse_protocol import render_sse
+
+    assert render_sse("run.started", {"thread_id": "thread-1"}) == (
+        'event: run.started\n'
+        'data: {"thread_id":"thread-1"}\n\n'
+    )
+
+
+def test_service_default_port_is_3004():
+    from service_app import DEFAULT_API_PORT
+
+    assert DEFAULT_API_PORT == 3004
+
+
+def test_batch_processor_uses_explicit_batch_route(tmp_path):
+    from batch_runtime import BatchProcessor, BatchRequest
+
+    input_file = tmp_path / "questions.txt"
+    input_file.write_text("什么是增值税？\n那进项税额呢？", encoding="utf-8")
+
+    class FakeExecutor:
+        def __init__(self):
+            self.requests = []
+
+        async def execute_turn(self, request):
+            self.requests.append(request)
+            return SimpleNamespace(
+                answer=f"answer {len(self.requests)}",
+                citations=[],
+                tool_events=[],
+                domain_analysis={},
+                skills=[],
+            )
+
+    fake_executor = FakeExecutor()
+    processor = BatchProcessor(fake_executor)
+    response = asyncio.run(
+        processor.run(
+            BatchRequest(
+                session_id="sess-batch",
+                trace_id="trace-batch",
+                input_file=str(input_file),
+                thread_strategy="per_question",
+            ),
+            output_dir=tmp_path / "output",
+        )
+    )
+
+    assert len(fake_executor.requests) == 2
+    assert fake_executor.requests[0].thread_id == "sess-batch-q1"
+    assert fake_executor.requests[1].thread_id == "sess-batch-q2"
+    assert Path(response.output_paths["markdown"]).exists()
+    assert Path(response.output_paths["json"]).exists()
+
+
+def test_cli_main_uses_batch_processor_instead_of_execute_with_evidence():
+    source = (Path(__file__).resolve().parents[1] / "main.py").read_text(encoding="utf-8")
+
+    assert "BatchProcessor" in source
+    assert "execute_with_evidence" not in source

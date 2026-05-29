@@ -26,12 +26,64 @@ class CheckpointConfig:
     def invoke_config(self) -> dict:
         return {"configurable": {"thread_id": self.thread_id}}
 
+    def invoke_config_for(
+        self,
+        thread_id: str | None = None,
+        metadata: dict | None = None,
+        tags: list[str] | None = None,
+        callbacks: list | None = None,
+    ) -> dict:
+        config = {"configurable": {"thread_id": thread_id or self.thread_id}}
+        if metadata:
+            config["metadata"] = metadata
+        if tags:
+            config["tags"] = tags
+        if callbacks:
+            config["callbacks"] = callbacks
+        return config
 
-def build_checkpoint_config(output_dir: str | Path, run_id: str | None = None) -> CheckpointConfig:
+
+def build_checkpoint_config(
+    output_dir: str | Path,
+    run_id: str | None = None,
+    backend_type: str | None = None,
+    dsn: str | None = None,
+) -> CheckpointConfig:
     thread_id = run_id or f"tax-run-{uuid.uuid4().hex}"
+    backend_type = backend_type or "auto"
+    if backend_type == "opengauss":
+        if not dsn:
+            raise RuntimeError("OPENGAUSS_DSN is required when CHECKPOINT_BACKEND=opengauss")
+        try:
+            from langgraph.checkpoint.postgres import PostgresSaver  # type: ignore
+        except Exception as exc:
+            raise RuntimeError(
+                "CHECKPOINT_BACKEND=opengauss requires langgraph-checkpoint-postgres"
+            ) from exc
+
+        return CheckpointConfig(
+            checkpointer=PostgresSaver.from_conn_string(dsn),
+            backend_type="opengauss",
+            thread_id=thread_id,
+            path=dsn,
+        )
+
+    if backend_type not in {"auto", "sqlite", "memory"}:
+        raise ValueError(f"Unsupported checkpoint backend: {backend_type}")
+
     checkpoint_dir = Path(output_dir) / "checkpoints"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     sqlite_path = checkpoint_dir / f"{_safe_filename(thread_id)}.sqlite"
+
+    if backend_type == "memory":
+        from langgraph.checkpoint.memory import InMemorySaver
+
+        return CheckpointConfig(
+            checkpointer=InMemorySaver(),
+            backend_type="memory",
+            thread_id=thread_id,
+            path=None,
+        )
 
     try:
         from langgraph.checkpoint.sqlite import SqliteSaver  # type: ignore
@@ -43,6 +95,8 @@ def build_checkpoint_config(output_dir: str | Path, run_id: str | None = None) -
             path=str(sqlite_path),
         )
     except Exception:
+        if backend_type == "sqlite":
+            raise
         from langgraph.checkpoint.memory import InMemorySaver
 
         return CheckpointConfig(
@@ -187,4 +241,3 @@ class AuditTraceRecorder:
                 **payload,
             }
         )
-

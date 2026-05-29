@@ -3,13 +3,14 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
-from langchain.chat_models import init_chat_model
 from deepagents.backends import FilesystemBackend
 
 from audit_trace import build_checkpoint_config, CheckpointConfig
 from config import AgentConfig
-from domain_knowledge import analyze_tax_question
+from conversation import ConversationRequest
+from domain_knowledge import analyze_tax_context, analyze_tax_question
 from intent_classifier import ClassifiedQuestion
+from observability import build_langfuse_observability
 from tax_retrieval import extract_citations_from_messages, retrieve_tax_context
 
 PART2_ROOT = Path(__file__).resolve().parent
@@ -53,17 +54,42 @@ class ExecutionResult:
     tool_events: list[dict] = field(default_factory=list)
     domain_analysis: dict = field(default_factory=dict)
     skills: list[str] = field(default_factory=list)
+    session_id: str | None = None
+    trace_id: str | None = None
+    thread_id: str | None = None
 
 
 class AgentExecutor:
     def __init__(self, config: AgentConfig, agent=None, checkpoint_config: CheckpointConfig | None = None):
         self._config = config
-        self._checkpoint_config = checkpoint_config or build_checkpoint_config(config.output_dir)
+        self._checkpoint_config = checkpoint_config or build_checkpoint_config(
+            config.output_dir,
+            backend_type=config.checkpoint_backend,
+            dsn=config.opengauss_dsn,
+        )
+        self._observability = build_langfuse_observability(config.langfuse_enabled)
         self._agent = agent or self.build_agent(config, checkpointer=self._checkpoint_config.checkpointer)
+
+    @property
+    def output_dir(self) -> str:
+        return self._config.output_dir
+
+    @property
+    def default_thread_id(self) -> str:
+        return self._checkpoint_config.thread_id
+
+    @property
+    def checkpoint_backend_type(self) -> str:
+        return self._checkpoint_config.backend_type
+
+    @property
+    def observability_provider(self) -> str:
+        return self._observability.provider
 
     @staticmethod
     def build_agent(config: AgentConfig, checkpointer=None):
         from deepagents import create_deep_agent
+        from langchain.chat_models import init_chat_model
 
         model = init_chat_model(
             config.model,
@@ -90,23 +116,58 @@ class AgentExecutor:
         return self._last_content(result["messages"])
 
     async def execute_with_evidence(self, question: ClassifiedQuestion) -> ExecutionResult:
-        prompt = self._build_native_prompt(question)
-        result = await self._ainvoke({"messages": [{"role": "user", "content": prompt}]})
+        request = ConversationRequest(
+            session_id="cli",
+            trace_id=self._checkpoint_config.thread_id,
+            thread_id=self._checkpoint_config.thread_id,
+            messages=[{"role": "user", "content": self._build_native_prompt(question)}],
+        )
+        return await self.execute_turn(request)
+
+    async def execute_turn(self, request: ConversationRequest) -> ExecutionResult:
+        result = await self._ainvoke(
+            {"messages": request.to_agent_messages()},
+            thread_id=request.thread_id,
+            metadata={
+                "session_id": request.session_id,
+                "trace_id": request.trace_id,
+                "thread_id": request.thread_id,
+                "checkpoint_backend": self._checkpoint_config.backend_type,
+            },
+            tags=[request.session_id, request.trace_id, request.thread_id],
+            callbacks=self._observability.callbacks,
+        )
         messages = result["messages"]
         structured_answer, structured_citations = self._structured_result(result)
         citations = structured_citations or extract_citations_from_messages(messages)
-        domain_analysis = analyze_tax_question(question.text)
+        domain_analysis = analyze_tax_context(request.to_agent_messages())
         return ExecutionResult(
-            answer=structured_answer or self._last_content(messages),
+            answer=structured_answer or self._last_assistant_content(messages),
             citations=citations,
             tool_events=self._collect_tool_events(messages),
             domain_analysis=domain_analysis,
             skills=self._skills_from_domain_analysis(domain_analysis),
+            session_id=request.session_id,
+            trace_id=request.trace_id,
+            thread_id=request.thread_id,
         )
 
-    async def _ainvoke(self, payload: dict) -> dict:
+    async def _ainvoke(
+        self,
+        payload: dict,
+        thread_id: str | None = None,
+        metadata: dict | None = None,
+        tags: list[str] | None = None,
+        callbacks: list | None = None,
+    ) -> dict:
+        config = self._checkpoint_config.invoke_config_for(
+            thread_id=thread_id,
+            metadata=metadata,
+            tags=tags,
+            callbacks=callbacks,
+        )
         try:
-            return await self._agent.ainvoke(payload, config=self._checkpoint_config.invoke_config)
+            return await self._agent.ainvoke(payload, config=config)
         except TypeError:
             return await self._agent.ainvoke(payload)
 
@@ -146,6 +207,18 @@ class AgentExecutor:
             return last.get("content", "")
         return getattr(last, "content", "")
 
+    @classmethod
+    def _last_assistant_content(cls, messages: list[Any]) -> str:
+        for message in reversed(messages):
+            role = message.get("role") if isinstance(message, dict) else getattr(message, "role", None)
+            message_type = message.get("type") if isinstance(message, dict) else getattr(message, "type", None)
+            class_name = message.__class__.__name__
+            if role == "assistant" or message_type == "ai" or class_name == "AIMessage":
+                content = message.get("content", "") if isinstance(message, dict) else getattr(message, "content", "")
+                if content:
+                    return content
+        return cls._last_content(messages)
+
     @staticmethod
     def _collect_tool_events(messages: list[Any]) -> list[dict]:
         events = []
@@ -183,3 +256,23 @@ class AgentExecutor:
         else:
             return "", []
         return data.get("answer", ""), data.get("citations", [])
+
+    def get_state(self, thread_id: str) -> dict:
+        if not hasattr(self._agent, "get_state"):
+            raise NotImplementedError("Agent does not expose get_state")
+        state = self._agent.get_state(self._checkpoint_config.invoke_config_for(thread_id=thread_id))
+        return self._jsonable_state(state)
+
+    def get_state_history(self, thread_id: str) -> list[dict]:
+        if not hasattr(self._agent, "get_state_history"):
+            raise NotImplementedError("Agent does not expose get_state_history")
+        history = self._agent.get_state_history(self._checkpoint_config.invoke_config_for(thread_id=thread_id))
+        return [self._jsonable_state(item) for item in history]
+
+    @staticmethod
+    def _jsonable_state(value: Any) -> dict:
+        if hasattr(value, "model_dump"):
+            return value.model_dump()
+        if isinstance(value, dict):
+            return value
+        return {"repr": repr(value)}

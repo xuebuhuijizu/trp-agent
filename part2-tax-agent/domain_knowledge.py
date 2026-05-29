@@ -147,3 +147,18 @@ def analyze_tax_question(question: str) -> dict:
         "intent_hypotheses": intent_hypotheses,
         "solution": generate_solution_outline(question, terms, scenarios, historical_references, intent_hypotheses),
     }
+
+
+def analyze_tax_context(messages: list[dict] | list[Any]) -> dict:
+    """Analyze recent conversation turns against local demo seed knowledge."""
+    chunks = []
+    for message in messages[-8:]:
+        if isinstance(message, dict):
+            role = message.get("role")
+            content = message.get("content", "")
+        else:
+            role = getattr(message, "role", None)
+            content = getattr(message, "content", "")
+        if role in {"user", "assistant"} and content:
+            chunks.append(str(content))
+    return analyze_tax_question("\n".join(chunks))
