@@ -31,6 +31,31 @@ F003 已经证明税审 Agent 可以输出本地 audit trace，并能把 LangGra
 | 运行恢复、state history、replay/time travel | checkpoint | 不放入 messages 或 memory | 这是 LangGraph execution state，不是对话文本或长期偏好。 |
 | 运行观测、trace、latency、tool calls、错误链 | Langfuse | 不再以本地 JSON trace 作为主路径 | 本地 trace 保留为离线 fallback；Langfuse 是主观测系统。 |
 
+## 讨论结论
+
+本轮围绕多 turns 与旧批处理流程做了四轮收敛：
+
+1. 铲屎官明确 F004 必须向多 turns 让步：用户一次输入、Agent 一次回复是一个 turn，多个 turns 组成一个对话；下一轮要借助前序 `messages`。
+2. 砚砚指出当前 `execute_with_evidence(ClassifiedQuestion)` 有三个矛盾：领域分析只看单问题、prompt 不携带历史、`_last_content(messages[-1])` 在多 turn 下可能取错消息。
+3. 宪宪判断主路径应改为 `execute_turn(messages, session_id, trace_id, thread_id)`；旧流程可保留，但不能继续支配主执行模型。
+4. 砚砚进一步指出“把旧批处理流程包装成 skill”也有矛盾：DeepAgents skill 是 progressive disclosure 指令集，而旧流程是外部确定性管道。最终决策：旧流程保留为显式 batch mode，由 CLI/API 路由选择，不包装成 skill。
+
+因此 F004 的最终结构是：
+
+```text
+多 turn 服务主路径:
+  POST /chat 或 POST /chat/stream
+  -> execute_turn(messages, session_id, trace_id, thread_id)
+  -> checkpoint + Langfuse
+
+批处理兼容路径:
+  CLI --batch 或 POST /batch
+  -> question_extractor -> intent_classifier -> per-question execute_turn
+  -> batch report/export
+```
+
+两条路径共享底层 Agent、tools、checkpoint、Langfuse 配置，但入口语义不同：`/chat` 是对话，`/batch` 是文档/问题列表处理。
+
 ## 能力分类
 
 | 能力 | 分类 | 说明 |
@@ -41,6 +66,7 @@ F003 已经证明税审 Agent 可以输出本地 audit trace，并能把 LangGra
 | Langfuse callback handler | project adapter | 通过 LangChain/LangGraph callback 接入 Langfuse，把运行事件送到观测系统。 |
 | OpenGauss checkpoint backend | project adapter | 基于 OpenGauss 的 PostgreSQL 兼容能力接入 `PostgresSaver`，不自建 checkpoint schema。 |
 | FastAPI `/chat` 与 `/chat/stream` | project adapter | 将 Agent 包装为应用系统可调用服务。 |
+| FastAPI `/batch` 与 CLI `--batch` | project adapter | 显式承载旧批处理管道，不伪装为 DeepAgents skill。 |
 | SSE event projection | project adapter | 把 DeepAgents/LangGraph stream events 映射为稳定服务协议。 |
 | 本地 Docker Compose 部署 Langfuse | demo-only scaffolding -> project adapter | 本地演示和低规模部署使用，生产部署不在本 feature 范围内。 |
 
@@ -70,6 +96,9 @@ F003 已经证明税审 Agent 可以输出本地 audit trace，并能把 LangGra
 - `session_id` 是应用会话标识，可与 `thread_id` 一对一或一对多，由调用方决定。
 - `trace_id` 是外部链路追踪标识，必须传入 Langfuse metadata/tags。
 - CLI 仍可保留，但服务路径是 F004 的主路径。
+- `execute_with_evidence(ClassifiedQuestion)` 降级为兼容 adapter；新核心接口命名为 `execute_turn(...)`。
+- `analyze_tax_question(question.text)` 不再在主路径强制按单问题运行；改为上下文感知的 `analyze_tax_context(messages)` 或等价工具。
+- 不再用 `messages[-1]` 判断最终回答；`/chat` 使用 structured response，本轮 assistant output，或 stream adapter 聚合结果。
 
 ### 2. OpenGauss checkpoint
 
@@ -114,6 +143,7 @@ F004 将 Langfuse 设为主观测路径：
 ```text
 POST /chat
 POST /chat/stream
+POST /batch
 GET  /health
 GET  /threads/{thread_id}/state
 GET  /threads/{thread_id}/history
@@ -163,6 +193,25 @@ SSE 映射要求：
 - 对外事件名稳定，内部 DeepAgents/LangGraph event schema 变化时只改 adapter。
 - stream 结束必须发 `run.finished`；异常必须发 `run.error` 并结束连接。
 
+`POST /batch` 为旧批处理流程的显式服务入口：
+
+```json
+{
+  "session_id": "sess-batch-001",
+  "trace_id": "trace-batch-001",
+  "input_file": "sample_input.txt",
+  "thread_strategy": "per_question"
+}
+```
+
+要求：
+
+- `/batch` 使用 `question_extractor`、`intent_classifier`、`output_formatter` 等确定性项目代码。
+- 每个问题调用 `execute_turn(...)`，而不是继续调用单问题主路径。
+- `thread_strategy` 至少支持 `per_question`；是否支持整份文档共用一个 `thread_id` 后续按演示需要决定。
+- `/batch` 可以生成 Markdown/JSON 报告，但不是 `/chat` 的替代品。
+- 不新增 `tax-audit-batch-intake` skill；批处理由 API/CLI 路由显式选择。
+
 ## 范围外
 
 - 不实现生产级认证、权限、多租户隔离。
@@ -171,6 +220,7 @@ SSE 映射要求：
 - 不把所有长期知识塞进 messages。
 - 不自建替代 LangGraph checkpoint 的状态表。
 - 不自建替代 Langfuse 的观测 UI。
+- 不把确定性 batch pipeline 包装成 DeepAgents skill。
 
 ## 实施顺序
 
@@ -178,6 +228,10 @@ SSE 映射要求：
 
 - 新增 request/response schema。
 - `AgentExecutor` 支持 `messages` 和外部传入 `thread_id`。
+- 新增 `execute_turn(...)` 作为主执行接口。
+- 将 `execute_with_evidence(ClassifiedQuestion)` 标记为兼容 adapter 或迁移到 batch 路径。
+- 将领域分析改为上下文感知工具，避免只分析当前短句。
+- 移除主路径对 `_last_content(messages[-1])` 的依赖。
 - CLI 路径复用同一 executor，不再复制 prompt 拼装逻辑。
 - 测试覆盖多 turn messages 传入、同一 `thread_id` 稳定使用。
 
@@ -199,9 +253,10 @@ SSE 映射要求：
 ### Phase 4: FastAPI 服务化与 SSE
 
 - 新增 FastAPI app。
-- 实现 `/chat`、`/chat/stream`、`/health`、state/history 查询接口。
+- 实现 `/chat`、`/chat/stream`、`/batch`、`/health`、state/history 查询接口。
 - 将 DeepAgents/LangGraph stream events 投影为 SSE 协议。
 - 增加接口测试和流式协议测试。
+- 增加 batch 路由测试，确保旧批处理流程由路由显式选择，而不是由 skill 触发。
 
 ### Phase 5: E2E 验证与演示文档
 
@@ -228,8 +283,9 @@ SSE 映射要求：
 9. [ ] Langfuse 本地部署说明可执行，健康检查能确认 UI/API 可达。
 10. [ ] 每次 `/chat` 和 `/chat/stream` 都在 Langfuse 中记录 trace，并包含 `session_id`、`trace_id`、`thread_id` metadata/tags。
 11. [ ] 本地 JSON trace 不再是默认主路径；只有 `LOCAL_AUDIT_TRACE_ENABLED=1` 时才写入。
-12. [ ] FastAPI 接口测试、checkpoint 持久化测试、Langfuse callback 配置测试、SSE 协议测试全部通过。
-13. [ ] 演示文档能指导铲屎官完成本地 OpenGauss + Langfuse + FastAPI E2E 验证。
+12. [ ] `/batch` 保留旧文档/问题列表处理能力，并由 CLI/API 路由显式选择，不包装成 DeepAgents skill。
+13. [ ] FastAPI 接口测试、checkpoint 持久化测试、Langfuse callback 配置测试、SSE 协议测试、batch 路由测试全部通过。
+14. [ ] 演示文档能指导铲屎官完成本地 OpenGauss + Langfuse + FastAPI E2E 验证。
 
 ## 依赖
 
@@ -250,6 +306,7 @@ SSE 映射要求：
 | messages 被误用成长期知识库 | request schema 和文档明确 messages/memory/checkpoint 边界，测试覆盖多 turn 但不灌入长期偏好。 |
 | SSE 暴露内部不稳定事件 | 使用 adapter 投影稳定事件名，不把内部 event 原样透出。 |
 | 本地 trace 与 Langfuse 双写造成混乱 | Langfuse 为默认主路径，本地 trace 只在显式开关下启用。 |
+| 旧批处理流程被误包装成 skill | batch pipeline 由 CLI/API 路由显式选择；skill 只保留为 Agent 可读指令，不承载外部确定性管道。 |
 | runtime 启停影响铲屎官环境 | 启动 OpenGauss/Langfuse/FastAPI 属于 runtime 操作，本 feature 提供脚本和说明，实际启动需铲屎官执行或授权。 |
 
 ## 参考资料

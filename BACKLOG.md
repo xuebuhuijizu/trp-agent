@@ -11,5 +11,4 @@ created: 2026-05-25
 
 | ID | Name | Status | Owner | Link |
 |----|------|--------|-------|------|
-
-当前无 active feature。
+| F004 | 对话运行时、持久化、观测与服务化 | spec | 宪宪 | [docs/features/F004-conversation-runtime-persistence-observability-service-spec.md](docs/features/F004-conversation-runtime-persistence-observability-service-spec.md) |
