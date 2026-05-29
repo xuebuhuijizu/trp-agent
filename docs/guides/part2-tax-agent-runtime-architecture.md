@@ -16,6 +16,7 @@ part2-tax-agent/
 ├─ app.py                         # ASGI 入口：uvicorn app:app --port 3004
 ├─ main.py                        # CLI batch 入口
 ├─ check_opengauss_compat.py       # OpenGauss checkpoint 兼容性验证脚本
+├─ check_sqlite_checkpoint_persistence.py # SQLite checkpoint 本地验证脚本
 ├─ sample_input.txt                # 本地 batch 示例输入
 ├─ requirements.txt
 ├─ skills/                         # DeepAgents progressive disclosure skills
@@ -142,6 +143,9 @@ uvicorn app:app --host 0.0.0.0 --port 3004
 $env:CHECKPOINT_BACKEND="opengauss"
 $env:OPENGAUSS_DSN="postgresql://user:password@localhost:5432/postgres"
 python check_opengauss_compat.py
+
+# SQLite checkpoint 调用链验证
+python check_sqlite_checkpoint_persistence.py --output output --thread-id demo-sqlite-thread
 ```
 
 `POST /chat` 示例：
@@ -158,4 +162,3 @@ python check_opengauss_compat.py
   ]
 }
 ```
-

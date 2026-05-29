@@ -8,8 +8,18 @@ created: 2026-05-29
 
 # F004: 对话运行时、持久化、观测与服务化
 
-> 状态: spec
+> 状态: in-progress
 > 负责人: 宪宪
+
+## 当前实现状态（2026-05-29）
+
+当前不降低 F004 的最终目标：生产级持久化仍以 OpenGauss checkpoint 为目标，主观测路径仍以 Langfuse 为目标。但在铲屎官本机 OpenGauss 暂不可用、Langfuse 仍在安装期间，项目先完成不依赖这两个外部运行时的部分：
+
+- 已完成：多 turn 对话契约、`execute_turn(...)` 主路径、显式 `/batch` 路由、FastAPI `3004` 服务入口、`/chat/stream` 基于 `astream_events(version="v2")` 的 SSE 事件投影、`tax_agent/` 包结构归类。
+- 已补强：FastAPI `/chat`、`/batch`、`state/history` 路由测试；SQLite checkpoint 验证脚本 `part2-tax-agent/check_sqlite_checkpoint_persistence.py`。
+- 当前本机环境状态：`.venv` 尚未安装 `langgraph-checkpoint-sqlite`、`langgraph-checkpoint-postgres`，SQLite/OpenGauss 真实持久化脚本会明确提示依赖缺失，不静默冒充验收通过。
+- 可用默认路径：`CHECKPOINT_BACKEND=auto|memory`、`LANGFUSE_ENABLED=0`，用于本地开发和单测；这不是 OpenGauss/Langfuse 最终 E2E 验收。
+- 待环境就绪：OpenGauss 连接/setup/state history/replay 验证；Langfuse 本地部署、callback metadata/tags、trace UI 可见性验证；完整 E2E 演示文档。
 
 ## 为什么
 
