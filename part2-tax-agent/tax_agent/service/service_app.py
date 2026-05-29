@@ -1,4 +1,5 @@
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+import inspect
 from typing import Any
 
 from tax_agent.config import AgentConfig
@@ -11,7 +12,17 @@ from tax_agent.service.batch_runtime import BatchProcessor, BatchRequest
 DEFAULT_API_PORT = 3004
 
 
-def create_app(executor_factory: Callable[[], AgentExecutor] | None = None):
+ExecutorFactory = Callable[[], AgentExecutor | Awaitable[AgentExecutor]]
+
+
+async def _resolve_executor(factory: ExecutorFactory) -> AgentExecutor:
+    executor = factory()
+    if inspect.isawaitable(executor):
+        return await executor
+    return executor
+
+
+def create_app(executor_factory: ExecutorFactory | None = None):
     try:
         from fastapi import FastAPI, HTTPException
         from fastapi.responses import StreamingResponse
@@ -19,7 +30,7 @@ def create_app(executor_factory: Callable[[], AgentExecutor] | None = None):
         raise RuntimeError("FastAPI service requires fastapi and uvicorn") from exc
 
     app = FastAPI(title="DeepAgents Tax Runtime", version="0.4.0")
-    factory = executor_factory or (lambda: AgentExecutor(AgentConfig()))
+    factory: ExecutorFactory = executor_factory or (lambda: AgentExecutor.create(AgentConfig()))
 
     @app.get("/health")
     async def health() -> dict:
@@ -27,7 +38,7 @@ def create_app(executor_factory: Callable[[], AgentExecutor] | None = None):
 
     @app.post("/chat")
     async def chat(request: ConversationRequest) -> dict:
-        executor = factory()
+        executor = await _resolve_executor(factory)
         result = await executor.execute_turn(request)
         return ChatResponse(
             session_id=request.session_id,
@@ -44,7 +55,7 @@ def create_app(executor_factory: Callable[[], AgentExecutor] | None = None):
 
     @app.post("/chat/stream")
     async def chat_stream(request: ConversationRequest):
-        executor = factory()
+        executor = await _resolve_executor(factory)
 
         async def events() -> AsyncIterator[str]:
             yield render_sse(
@@ -65,7 +76,7 @@ def create_app(executor_factory: Callable[[], AgentExecutor] | None = None):
 
     @app.post("/batch")
     async def batch(request: BatchRequest) -> dict:
-        executor = factory()
+        executor = await _resolve_executor(factory)
         processor = BatchProcessor(executor)
         response = await processor.run(request, output_dir=executor.output_dir)
         return {
@@ -77,7 +88,7 @@ def create_app(executor_factory: Callable[[], AgentExecutor] | None = None):
 
     @app.get("/threads/{thread_id}/state")
     async def get_thread_state(thread_id: str) -> dict:
-        executor = factory()
+        executor = await _resolve_executor(factory)
         try:
             return {"thread_id": thread_id, "state": executor.get_state(thread_id)}
         except NotImplementedError as exc:
@@ -85,13 +96,10 @@ def create_app(executor_factory: Callable[[], AgentExecutor] | None = None):
 
     @app.get("/threads/{thread_id}/history")
     async def get_thread_history(thread_id: str) -> dict:
-        executor = factory()
+        executor = await _resolve_executor(factory)
         try:
             return {"thread_id": thread_id, "history": executor.get_state_history(thread_id)}
         except NotImplementedError as exc:
             raise HTTPException(status_code=501, detail=str(exc)) from exc
 
     return app
-
-
-app = create_app

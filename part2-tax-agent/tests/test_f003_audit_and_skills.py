@@ -10,7 +10,8 @@ from tax_agent.domain.domain_knowledge import (
     match_historical_questions,
     match_tax_terms,
 )
-from tax_agent.runtime.audit_trace import AuditTraceRecorder, build_checkpoint_config
+from tax_agent.runtime.audit_trace import AuditTraceRecorder
+from tax_agent.runtime.checkpointing import build_checkpoint_config
 
 
 ROOT = Path(__file__).resolve().parents[1]

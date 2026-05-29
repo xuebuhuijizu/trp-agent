@@ -1,3 +1,14 @@
+"""DeepAgents execution boundary for the current tax-agent runtime.
+
+Main path:
+    - execute_turn(...) for /chat and batch-adapted turns
+    - stream_turn(...) for /chat/stream
+
+Compatibility path:
+    - execute(...) and execute_with_evidence(...) are retained for old tests and
+      earlier F001-F003 call shapes. New runtime code should not call them.
+"""
+
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,7 +20,7 @@ from tax_agent.config import AgentConfig
 from tax_agent.domain.domain_knowledge import analyze_tax_context, analyze_tax_question
 from tax_agent.domain.intent_classifier import ClassifiedQuestion
 from tax_agent.domain.tax_retrieval import extract_citations_from_messages, retrieve_tax_context
-from tax_agent.runtime.audit_trace import (
+from tax_agent.runtime.checkpointing import (
     CheckpointConfig,
     build_async_checkpoint_config,
     build_checkpoint_config,
@@ -65,6 +76,8 @@ class ExecutionResult:
 
 
 class AgentExecutor:
+    """Wraps DeepAgents with stable project-level request/response methods."""
+
     def __init__(self, config: AgentConfig, agent=None, checkpoint_config: CheckpointConfig | None = None):
         self._config = config
         self._checkpoint_config = checkpoint_config

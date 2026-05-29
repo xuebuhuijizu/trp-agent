@@ -43,6 +43,27 @@ def test_chat_route_returns_final_response_with_checkpoint_metadata():
     }
 
 
+def test_chat_route_accepts_async_executor_factory():
+    class FakeExecutor:
+        checkpoint_backend_type = "sqlite"
+        observability_provider = "none"
+
+        async def execute_turn(self, request):
+            return SimpleNamespace(answer="async factory answer", citations=[])
+
+    async def build_executor():
+        return FakeExecutor()
+
+    app = create_app(build_executor)
+
+    with TestClient(app) as client:
+        response = client.post("/chat", json=_chat_payload())
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "async factory answer"
+    assert response.json()["checkpoint"]["backend_type"] == "sqlite"
+
+
 def test_state_and_history_routes_use_executor_state_accessors():
     class FakeExecutor:
         def get_state(self, thread_id):

@@ -8,7 +8,7 @@ import pytest
 from tax_agent.config import AgentConfig
 from tax_agent.domain.domain_knowledge import analyze_tax_context
 from tax_agent.runtime.agent_executor import AgentExecutor
-from tax_agent.runtime.audit_trace import build_checkpoint_config
+from tax_agent.runtime.checkpointing import build_checkpoint_config
 from tax_agent.runtime.conversation import ConversationMessage, ConversationRequest
 
 
