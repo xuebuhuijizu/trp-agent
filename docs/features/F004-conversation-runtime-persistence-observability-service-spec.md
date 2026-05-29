@@ -19,7 +19,7 @@ created: 2026-05-29
 - 已补强：FastAPI `/chat`、`/batch`、`state/history` 路由测试；SQLite checkpoint 验证脚本 `part2-tax-agent/check_sqlite_checkpoint_persistence.py`。
 - 当前本机环境状态：`.venv` 尚未安装 `langgraph-checkpoint-sqlite`、`langgraph-checkpoint-postgres`，SQLite/OpenGauss 真实持久化脚本会明确提示依赖缺失，不静默冒充验收通过。
 - 可用默认路径：`CHECKPOINT_BACKEND=auto|memory`、`LANGFUSE_ENABLED=0`，用于本地开发和单测；这不是 OpenGauss/Langfuse 最终 E2E 验收。
-- 待环境就绪：OpenGauss 连接/setup/state history/replay 验证；Langfuse 本地部署、callback metadata/tags、trace UI 可见性验证；完整 E2E 演示文档。
+- 待环境就绪：OpenGauss 连接/setup/state history/replay 验证（注：`langgraph-checkpoint-postgres` 当前版本与 openGauss 6.0.5 SQL 方言不完全兼容，需等待 upstream 适配或自定义 adapter）；Langfuse 本地部署、callback metadata/tags、trace UI 可见性验证；完整 E2E 演示文档。
 
 ## 为什么
 
@@ -110,21 +110,38 @@ F003 已经证明税审 Agent 可以输出本地 audit trace，并能把 LangGra
 - `analyze_tax_question(question.text)` 不再在主路径强制按单问题运行；改为上下文感知的 `analyze_tax_context(messages)` 或等价工具。
 - 不再用 `messages[-1]` 判断最终回答；`/chat` 使用 structured response，本轮 assistant output，或 stream adapter 聚合结果。
 
-### 2. OpenGauss checkpoint
+### 2. SQLite checkpoint（当前首选持久化方案）
 
-将当前 `build_checkpoint_config` 从 `sqlite -> memory fallback` 升级为：
+当前使用 SQLite 作为本地持久化 checkpoint。
+
+- `CHECKPOINT_BACKEND=auto` 会优先尝试 `SqliteSaver`，不可用时降级为 `InMemorySaver`。
+- 验证脚本：`part2-tax-agent/check_sqlite_checkpoint_persistence.py`（已验证通过，`history_count: 3`）。
+- SQLite 文件输出至 `output/checkpoints/<thread_id>.sqlite`。
+- SQLite 可满足本地开发和内网部署需求，不需要外部数据库服务。
+
+### 3. OpenGauss checkpoint（待 upstream 适配）
+
+将当前 `build_checkpoint_config` 扩展为支持 OpenGauss：
 
 ```text
 CHECKPOINT_BACKEND=opengauss|sqlite|memory
 OPENGAUSS_DSN=postgresql://user:password@localhost:5432/dbname
 ```
 
+已知限制（2026-05-29 验证）：
+
+- `langgraph-checkpoint-postgres` 当前版本与 openGauss 6.0.5 SQL 方言不完全兼容。
+- `PostgresSaver.setup()` 的 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 语法不被 openGauss 支持。
+- `PostgresSaver.put()` 的 API 签名与当前安装版本不匹配。
+- 连接和手动 DDL 建表已验证通过，openGauss 可作为数据存储层。
+
 实现要求：
 
-- `opengauss` 使用 `langgraph-checkpoint-postgres` 的 `PostgresSaver` 或 `AsyncPostgresSaver`。
+- `opengauss` 优先使用 `langgraph-checkpoint-postgres` 的 `PostgresSaver`（待 upstream 修复兼容性后）。
+- 短期替代方案：基于 `BaseCheckpointSaver` 实现自定义 openGauss adapter，通过 raw SQL 操作。
 - 启动时执行 checkpointer setup/migration，不在业务请求中临时建表。
 - 当 `CHECKPOINT_BACKEND=opengauss` 但连接失败时，服务启动失败；不要静默 fallback 到 memory。
-- `sqlite` 和 `memory` 仅用于本地快速测试，不能冒充持久化验收。
+- `sqlite` 和 `memory` 可用于本地快速测试，但不能冒充持久化验收。
 - 新增验证脚本或测试：第一次运行写入 checkpoint，重启进程后用同一 `thread_id` 读取最新 state/history，并从指定 checkpoint replay。
 
 ### 3. Langfuse observability
