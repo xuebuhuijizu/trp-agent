@@ -86,10 +86,12 @@ def build_checkpoint_config(
         )
 
     try:
+        import sqlite3
         from langgraph.checkpoint.sqlite import SqliteSaver  # type: ignore
 
+        conn = sqlite3.connect(str(sqlite_path), check_same_thread=False)
         return CheckpointConfig(
-            checkpointer=SqliteSaver.from_conn_string(str(sqlite_path)),
+            checkpointer=SqliteSaver(conn),
             backend_type="sqlite",
             thread_id=thread_id,
             path=str(sqlite_path),
