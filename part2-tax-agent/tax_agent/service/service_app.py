@@ -56,20 +56,10 @@ def create_app(executor_factory: Callable[[], AgentExecutor] | None = None):
                 },
             )
             try:
-                result = await executor.execute_turn(request)
+                async for event in executor.stream_turn(request):
+                    yield render_sse(event["event"], event["data"])
             except Exception as exc:
                 yield render_sse("run.error", {"error": type(exc).__name__, "message": str(exc)})
-                return
-            if result.answer:
-                yield render_sse("agent.message.delta", {"text": result.answer})
-            yield render_sse(
-                "run.finished",
-                {
-                    "answer": result.answer,
-                    "citations": result.citations,
-                    "thread_id": request.thread_id,
-                },
-            )
 
         return StreamingResponse(events(), media_type="text/event-stream")
 

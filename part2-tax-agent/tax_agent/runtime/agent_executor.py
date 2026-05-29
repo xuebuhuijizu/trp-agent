@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,7 @@ from tax_agent.domain.tax_retrieval import extract_citations_from_messages, retr
 from tax_agent.runtime.audit_trace import CheckpointConfig, build_checkpoint_config
 from tax_agent.runtime.conversation import ConversationRequest
 from tax_agent.runtime.observability import build_langfuse_observability
+from tax_agent.runtime.stream_events import normalize_stream_event
 
 PART2_ROOT = Path(__file__).resolve().parents[2]
 SKILL_SOURCES = ["/skills"]
@@ -151,6 +153,58 @@ class AgentExecutor:
             trace_id=request.trace_id,
             thread_id=request.thread_id,
         )
+
+    async def stream_turn(self, request: ConversationRequest) -> AsyncIterator[dict]:
+        payload = {"messages": request.to_agent_messages()}
+        config = self._checkpoint_config.invoke_config_for(
+            thread_id=request.thread_id,
+            metadata={
+                "session_id": request.session_id,
+                "trace_id": request.trace_id,
+                "thread_id": request.thread_id,
+                "checkpoint_backend": self._checkpoint_config.backend_type,
+            },
+            tags=[request.session_id, request.trace_id, request.thread_id],
+            callbacks=self._observability.callbacks,
+        )
+
+        answer_parts: list[str] = []
+        citations: list[dict] = []
+        final_messages: list[Any] = []
+
+        async for raw_event in self._astream_events(payload, config):
+            normalized = normalize_stream_event(raw_event)
+            if not normalized:
+                output = raw_event.get("data", {}).get("output") if isinstance(raw_event, dict) else None
+                if isinstance(output, dict) and isinstance(output.get("messages"), list):
+                    final_messages = output["messages"]
+                continue
+            if normalized["event"] == "agent.message.delta":
+                answer_parts.append(normalized["data"]["text"])
+            if normalized["event"] == "tool.finished":
+                citations.extend(normalized["data"].get("citations", []))
+                normalized["data"].pop("citations", None)
+            yield normalized
+
+        answer = "".join(answer_parts)
+        if not answer and final_messages:
+            answer = self._last_assistant_content(final_messages)
+        yield {
+            "event": "run.finished",
+            "data": {
+                "answer": answer,
+                "citations": citations,
+                "thread_id": request.thread_id,
+            },
+        }
+
+    async def _astream_events(self, payload: dict, config: dict) -> AsyncIterator[dict]:
+        try:
+            stream = self._agent.astream_events(payload, config=config, version="v2")
+        except TypeError:
+            stream = self._agent.astream_events(payload, version="v2")
+        async for event in stream:
+            yield event
 
     async def _ainvoke(
         self,
