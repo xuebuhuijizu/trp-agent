@@ -8,8 +8,9 @@ created: 2026-05-28
 
 # F003: 审计 Trace 与税审领域 Skills 增强
 
-> 状态: spec  
-> 负责人: 待定
+> 状态: completed
+> 负责人: 宪宪
+> 完成提交: `c125666 feat: F003 audit trace checkpoint and domain skills`
 
 ## 为什么
 

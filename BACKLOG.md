@@ -11,4 +11,5 @@ created: 2026-05-25
 
 | ID | Name | Status | Owner | Link |
 |----|------|--------|-------|------|
-| F003 | 审计 Trace 与税审领域 Skills 增强 | spec | 待定 | [docs/features/F003-audit-trace-and-domain-skills-spec.md](docs/features/F003-audit-trace-and-domain-skills-spec.md) |
+
+当前无 active feature。

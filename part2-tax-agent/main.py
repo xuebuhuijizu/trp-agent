@@ -35,7 +35,7 @@ def _file_hash(path: str) -> str:
 
 async def main():
     parser = argparse.ArgumentParser(description="税务智能问答 Agent")
-    parser.add_argument("--input", "-i", default="input.docx", help="输入 Word 文件路径")
+    parser.add_argument("--input", "-i", default="sample_input.txt", help="输入文件路径（支持 .txt / .docx）")
     parser.add_argument("--output", "-o", default="./output", help="输出目录")
     parser.add_argument("--model", "-m", default=os.getenv("DEEPAGENTS_MODEL", "openai:gpt-4o"), help="LLM 模型")
     args = parser.parse_args()
