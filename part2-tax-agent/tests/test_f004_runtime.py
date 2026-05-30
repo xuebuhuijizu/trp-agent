@@ -134,6 +134,7 @@ def test_service_app_reports_missing_fastapi_dependency(monkeypatch):
 
 
 def test_agent_config_reads_environment_at_instantiation(monkeypatch):
+    monkeypatch.setenv("DEEPAGENTS_MODEL", "openai:MiniMax-M2.7")
     monkeypatch.setenv("CHECKPOINT_BACKEND", "opengauss")
     monkeypatch.setenv("OPENGAUSS_DSN", "postgresql://u:p@localhost:5432/db")
     monkeypatch.setenv("LANGFUSE_ENABLED", "1")
@@ -141,6 +142,7 @@ def test_agent_config_reads_environment_at_instantiation(monkeypatch):
 
     config = AgentConfig()
 
+    assert config.model == "openai:MiniMax-M2.7"
     assert config.checkpoint_backend == "opengauss"
     assert config.opengauss_dsn == "postgresql://u:p@localhost:5432/db"
     assert config.langfuse_enabled is True
@@ -176,6 +178,18 @@ def test_langfuse_check_script_masks_secret_values(monkeypatch):
     assert all(result.ok for result in results)
     assert "abcdefghij" not in results[1].detail
     assert results[2].detail == "http://localhost:3000"
+
+
+def test_runtime_entrypoints_load_dotenv_with_utf8_sig():
+    root = Path(__file__).resolve().parents[1]
+
+    main_source = (root / "main.py").read_text(encoding="utf-8")
+    app_source = (root / "app.py").read_text(encoding="utf-8")
+    langfuse_check_source = (root / "check_langfuse_observability.py").read_text(encoding="utf-8")
+
+    assert 'encoding="utf-8-sig"' in main_source
+    assert 'encoding="utf-8-sig"' in app_source
+    assert 'encoding="utf-8-sig"' in langfuse_check_source
 
 
 def test_batch_processor_uses_explicit_batch_route(tmp_path):

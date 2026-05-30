@@ -9,7 +9,9 @@ import argparse
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-load_dotenv()
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(PROJECT_ROOT / ".env", encoding="utf-8-sig")
 from deepagents import register_provider_profile, ProviderProfile
 
 register_provider_profile("openai",

@@ -90,7 +90,7 @@ def _check_auth(base_url: str) -> CheckResult:
 
 
 def main() -> int:
-    load_dotenv(ROOT / ".env")
+    load_dotenv(ROOT / ".env", encoding="utf-8-sig")
     os.environ.setdefault("LANGFUSE_ENABLED", "1")
 
     base_url = os.getenv("LANGFUSE_BASE_URL") or os.getenv("LANGFUSE_HOST") or ""

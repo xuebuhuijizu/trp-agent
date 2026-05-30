@@ -5,7 +5,7 @@ from typing import Optional
 
 @dataclass
 class AgentConfig:
-    model: str = "openai:gpt-4o"
+    model: str = field(default_factory=lambda: os.getenv("DEEPAGENTS_MODEL", "openai:gpt-4o"))
     input_file: str = "input.docx"
     output_dir: str = "output"
     temperature: float = 0.1
