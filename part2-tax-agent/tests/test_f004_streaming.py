@@ -44,6 +44,7 @@ def test_chat_stream_uses_executor_stream_turn_instead_of_execute_turn():
             body = response.read().decode("utf-8")
 
     assert response.status_code == 200
+    assert "charset=utf-8" in response.headers["content-type"]
     assert body.count("event: agent.message.delta") == 2
     assert "first " in body
     assert "second" in body
@@ -121,4 +122,3 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
             },
         },
     ]
-

@@ -75,6 +75,38 @@ class ExecutionResult:
     thread_id: str | None = None
 
 
+class ModelOutputError(RuntimeError):
+    pass
+
+
+class ReasoningFilter:
+    def __init__(self):
+        self.in_reasoning = False
+        self.saw_reasoning = False
+
+    def filter(self, text: str) -> str:
+        output = []
+        index = 0
+        while index < len(text):
+            if self.in_reasoning:
+                end = text.find("</think>", index)
+                self.saw_reasoning = True
+                if end == -1:
+                    return "".join(output)
+                self.in_reasoning = False
+                index = end + len("</think>")
+                continue
+            start = text.find("<think>", index)
+            if start == -1:
+                output.append(text[index:])
+                break
+            output.append(text[index:start])
+            self.in_reasoning = True
+            self.saw_reasoning = True
+            index = start + len("<think>")
+        return "".join(output)
+
+
 class AgentExecutor:
     """Wraps DeepAgents with stable project-level request/response methods."""
 
@@ -171,8 +203,11 @@ class AgentExecutor:
         structured_answer, structured_citations = self._structured_result(result)
         citations = structured_citations or extract_citations_from_messages(messages)
         domain_analysis = analyze_tax_context(request.to_agent_messages())
+        answer = self._clean_answer(structured_answer or self._last_assistant_content(messages))
+        if not answer:
+            raise ModelOutputError("模型未产生最终回答，可能只输出了 reasoning 或当前模型不支持工具调用。")
         return ExecutionResult(
-            answer=structured_answer or self._last_assistant_content(messages),
+            answer=answer,
             citations=citations,
             tool_events=self._collect_tool_events(messages),
             domain_analysis=domain_analysis,
@@ -199,6 +234,7 @@ class AgentExecutor:
         answer_parts: list[str] = []
         citations: list[dict] = []
         final_messages: list[Any] = []
+        reasoning_filter = ReasoningFilter()
 
         async for raw_event in self._astream_events(payload, config):
             normalized = normalize_stream_event(raw_event)
@@ -208,15 +244,29 @@ class AgentExecutor:
                     final_messages = output["messages"]
                 continue
             if normalized["event"] == "agent.message.delta":
-                answer_parts.append(normalized["data"]["text"])
+                text = reasoning_filter.filter(normalized["data"]["text"])
+                if not text:
+                    continue
+                normalized["data"]["text"] = text
+                answer_parts.append(text)
             if normalized["event"] == "tool.finished":
                 citations.extend(normalized["data"].get("citations", []))
                 normalized["data"].pop("citations", None)
             yield normalized
 
-        answer = "".join(answer_parts)
+        answer = self._clean_answer("".join(answer_parts))
         if not answer and final_messages:
-            answer = self._last_assistant_content(final_messages)
+            answer = self._clean_answer(self._last_assistant_content(final_messages))
+        if not answer:
+            yield {
+                "event": "run.error",
+                "data": {
+                    "error": "ModelOutputError",
+                    "message": "模型未产生最终回答，可能只输出了 reasoning 或当前模型不支持工具调用。",
+                    "thread_id": request.thread_id,
+                },
+            }
+            return
         yield {
             "event": "run.finished",
             "data": {
@@ -339,6 +389,10 @@ class AgentExecutor:
         else:
             return "", []
         return data.get("answer", ""), data.get("citations", [])
+
+    @staticmethod
+    def _clean_answer(answer: str) -> str:
+        return ReasoningFilter().filter(answer).strip()
 
     def get_state(self, thread_id: str) -> dict:
         if not hasattr(self._agent, "get_state"):

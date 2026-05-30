@@ -43,6 +43,25 @@ def test_chat_route_returns_final_response_with_checkpoint_metadata():
     }
 
 
+def test_chat_route_returns_utf8_chinese_without_json_escape():
+    class FakeExecutor:
+        checkpoint_backend_type = "memory"
+        observability_provider = "none"
+
+        async def execute_turn(self, request):
+            return SimpleNamespace(answer="增值税可以抵扣", citations=[])
+
+    app = create_app(lambda: FakeExecutor())
+
+    with TestClient(app) as client:
+        response = client.post("/chat", json=_chat_payload())
+
+    body = response.content.decode("utf-8")
+    assert response.headers["content-type"] == "application/json; charset=utf-8"
+    assert "增值税可以抵扣" in body
+    assert "\\u589e" not in body
+
+
 def test_chat_route_accepts_async_executor_factory():
     class FakeExecutor:
         checkpoint_backend_type = "sqlite"
