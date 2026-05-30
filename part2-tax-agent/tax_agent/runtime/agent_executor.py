@@ -235,6 +235,7 @@ class AgentExecutor:
         citations: list[dict] = []
         final_messages: list[Any] = []
         reasoning_filter = ReasoningFilter()
+        saw_tool_event = False
 
         async for raw_event in self._astream_events(payload, config):
             normalized = normalize_stream_event(raw_event)
@@ -250,14 +251,33 @@ class AgentExecutor:
                 normalized["data"]["text"] = text
                 answer_parts.append(text)
             if normalized["event"] == "tool.finished":
+                saw_tool_event = True
                 citations.extend(normalized["data"].get("citations", []))
                 normalized["data"].pop("citations", None)
+            if normalized["event"] == "tool.started":
+                saw_tool_event = True
             yield normalized
 
         answer = self._clean_answer("".join(answer_parts))
         if not answer and final_messages:
             answer = self._clean_answer(self._last_assistant_content(final_messages))
         if not answer:
+            self._observability.record_event(
+                "stream_adapter.error",
+                input={"messages": request.to_agent_messages()},
+                metadata={
+                    "error": "ModelOutputError",
+                    "session_id": request.session_id,
+                    "trace_id": request.trace_id,
+                    "thread_id": request.thread_id,
+                    "checkpoint_backend": self._checkpoint_config.backend_type,
+                    "partial_answer_length": len("".join(answer_parts)),
+                    "saw_tool_event": saw_tool_event,
+                    "saw_final_messages": bool(final_messages),
+                },
+                level="ERROR",
+                status_message="Model produced no usable final answer in /chat/stream adapter.",
+            )
             yield {
                 "event": "run.error",
                 "data": {
