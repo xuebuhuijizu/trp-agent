@@ -6,6 +6,7 @@ from typing import Any
 from tax_agent.config import AgentConfig
 from tax_agent.runtime.agent_executor import AgentExecutor, ModelOutputError
 from tax_agent.runtime.conversation import ChatResponse, ConversationRequest
+from tax_agent.runtime.response_strategy import InvalidInteractionMode, resolve_response_strategy
 from tax_agent.runtime.sse_protocol import render_sse
 from tax_agent.service.batch_runtime import BatchProcessor, BatchRequest
 
@@ -33,6 +34,13 @@ def utf8_json(payload: Any, status_code: int = 200):
     )
 
 
+def invalid_interaction_mode_response(exc: InvalidInteractionMode):
+    return utf8_json(
+        {"error": "InvalidInteractionMode", "message": str(exc)},
+        status_code=400,
+    )
+
+
 def create_app(executor_factory: ExecutorFactory | None = None):
     try:
         from fastapi import FastAPI, HTTPException
@@ -49,6 +57,10 @@ def create_app(executor_factory: ExecutorFactory | None = None):
 
     @app.post("/chat")
     async def chat(request: ConversationRequest):
+        try:
+            resolve_response_strategy("chat", request.interaction_mode)
+        except InvalidInteractionMode as exc:
+            return invalid_interaction_mode_response(exc)
         executor = await _resolve_executor(factory)
         try:
             result = await executor.execute_turn(request)
@@ -80,6 +92,10 @@ def create_app(executor_factory: ExecutorFactory | None = None):
 
     @app.post("/chat/stream")
     async def chat_stream(request: ConversationRequest):
+        try:
+            strategy = resolve_response_strategy("stream", request.interaction_mode)
+        except InvalidInteractionMode as exc:
+            return invalid_interaction_mode_response(exc)
         executor = await _resolve_executor(factory)
 
         async def events() -> AsyncIterator[str]:
@@ -93,6 +109,8 @@ def create_app(executor_factory: ExecutorFactory | None = None):
             )
             try:
                 async for event in executor.stream_turn(request):
+                    if event["event"] == "answer.delta" and not strategy.include_answer_delta:
+                        continue
                     yield render_sse(event["event"], event["data"])
             except Exception as exc:
                 yield render_sse("run.error", {"error": type(exc).__name__, "message": str(exc)})
@@ -101,6 +119,10 @@ def create_app(executor_factory: ExecutorFactory | None = None):
 
     @app.post("/batch")
     async def batch(request: BatchRequest):
+        try:
+            resolve_response_strategy("batch", request.interaction_mode)
+        except InvalidInteractionMode as exc:
+            return invalid_interaction_mode_response(exc)
         executor = await _resolve_executor(factory)
         processor = BatchProcessor(executor)
         try:

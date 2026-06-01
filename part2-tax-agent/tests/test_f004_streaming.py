@@ -26,13 +26,20 @@ def test_chat_stream_uses_executor_stream_turn_instead_of_execute_turn():
             raise AssertionError("/chat/stream must not call execute_turn")
 
         async def stream_turn(self, request):
-            yield {"event": "agent.message.delta", "data": {"text": "first "}}
-            yield {"event": "agent.message.delta", "data": {"text": "second"}}
+            yield {"event": "answer.started", "data": {"thread_id": request.thread_id}}
+            yield {"event": "answer.delta", "data": {"text": "first "}}
+            yield {"event": "answer.delta", "data": {"text": "second"}}
             yield {
-                "event": "run.finished",
+                "event": "answer.finished",
                 "data": {
                     "answer": "first second",
                     "citations": [],
+                    "thread_id": request.thread_id,
+                },
+            }
+            yield {
+                "event": "run.finished",
+                "data": {
                     "thread_id": request.thread_id,
                 },
             }
@@ -45,10 +52,65 @@ def test_chat_stream_uses_executor_stream_turn_instead_of_execute_turn():
 
     assert response.status_code == 200
     assert "charset=utf-8" in response.headers["content-type"]
-    assert body.count("event: agent.message.delta") == 2
+    assert "event: answer.started" in body
+    assert body.count("event: answer.delta") == 2
+    assert "event: answer.finished" in body
     assert "first " in body
     assert "second" in body
     assert "event: run.finished" in body
+
+
+def test_chat_stream_progress_mode_filters_answer_delta():
+    from fastapi.testclient import TestClient
+
+    from tax_agent.service.service_app import create_app
+
+    class FakeExecutor:
+        async def stream_turn(self, request):
+            yield {"event": "answer.started", "data": {"thread_id": request.thread_id}}
+            yield {"event": "answer.delta", "data": {"text": "hidden"}}
+            yield {
+                "event": "answer.finished",
+                "data": {
+                    "answer": "final answer",
+                    "citations": [],
+                    "thread_id": request.thread_id,
+                },
+            }
+            yield {"event": "run.finished", "data": {"thread_id": request.thread_id}}
+
+    payload = {**_chat_payload(), "interaction_mode": "progress_stream"}
+    app = create_app(lambda: FakeExecutor())
+
+    with TestClient(app) as client:
+        with client.stream("POST", "/chat/stream", json=payload) as response:
+            body = response.read().decode("utf-8")
+
+    assert response.status_code == 200
+    assert "event: answer.started" in body
+    assert "event: answer.delta" not in body
+    assert "hidden" not in body
+    assert "event: answer.finished" in body
+    assert "final answer" in body
+
+
+def test_chat_stream_rejects_structured_final_interaction_mode():
+    from fastapi.testclient import TestClient
+
+    from tax_agent.service.service_app import create_app
+
+    class FakeExecutor:
+        async def stream_turn(self, request):
+            raise AssertionError("invalid interaction mode should be rejected before streaming")
+
+    payload = {**_chat_payload(), "interaction_mode": "structured_final"}
+    app = create_app(lambda: FakeExecutor())
+
+    with TestClient(app) as client:
+        response = client.post("/chat/stream", json=payload)
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "InvalidInteractionMode"
 
 
 @pytest.mark.asyncio
@@ -100,8 +162,9 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
     assert fake_agent.config["metadata"]["trace_id"] == "trace-stream"
     assert fake_agent.version == "v2"
     assert events == [
-        {"event": "agent.message.delta", "data": {"text": "hello "}},
-        {"event": "agent.message.delta", "data": {"text": "world"}},
+        {"event": "answer.started", "data": {"thread_id": "thread-stream"}},
+        {"event": "answer.delta", "data": {"text": "hello "}},
+        {"event": "answer.delta", "data": {"text": "world"}},
         {
             "event": "tool.started",
             "data": {"name": "retrieve_tax_context", "input": {"query": "vat"}},
@@ -114,10 +177,16 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
             },
         },
         {
-            "event": "run.finished",
+            "event": "answer.finished",
             "data": {
                 "answer": "hello world",
                 "citations": [{"source_id": "vat-regulation", "title": "VAT"}],
+                "thread_id": "thread-stream",
+            },
+        },
+        {
+            "event": "run.finished",
+            "data": {
                 "thread_id": "thread-stream",
             },
         },

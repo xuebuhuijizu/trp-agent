@@ -16,7 +16,7 @@ def normalize_stream_event(raw_event: dict) -> dict | None:
         text = chunk_text(data.get("chunk"))
         if not text:
             return None
-        return {"event": "agent.message.delta", "data": {"text": text}}
+        return {"event": "answer.delta", "data": {"text": text}}
 
     if event_type == "on_tool_start":
         return {
@@ -89,4 +89,3 @@ def jsonable(value: Any) -> Any:
     if value is None or isinstance(value, str | int | float | bool):
         return value
     return str(value)
-

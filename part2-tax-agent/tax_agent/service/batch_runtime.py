@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from tax_agent.domain.intent_classifier import ClassifiedQuestion, IntentClassifier
 from tax_agent.io.output_formatter import OutputFormatter
 from tax_agent.io.question_extractor import extract_questions
-from tax_agent.runtime.conversation import ConversationMessage, ConversationRequest
+from tax_agent.runtime.conversation import ConversationMessage, ConversationRequest, InteractionMode
 
 
 class BatchRequest(BaseModel):
@@ -14,6 +14,7 @@ class BatchRequest(BaseModel):
     trace_id: str = Field(min_length=1)
     input_file: str = Field(min_length=1)
     thread_strategy: str = "per_question"
+    interaction_mode: InteractionMode | None = None
 
 
 @dataclass

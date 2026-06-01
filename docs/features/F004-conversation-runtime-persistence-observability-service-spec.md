@@ -16,6 +16,7 @@ created: 2026-05-29
 当前不降低 F004 的最终目标：生产级持久化仍以 OpenGauss checkpoint 为目标，主观测路径仍以 Langfuse 为目标。但在铲屎官本机 OpenGauss 暂不可用、Langfuse 仍在安装期间，项目先完成不依赖这两个外部运行时的部分：
 
 - 已完成：多 turn 对话契约、`execute_turn(...)` 主路径、显式 `/batch` 路由、FastAPI `3004` 服务入口、`/chat/stream` 基于 `astream_events(version="v2")` 的 SSE 事件投影、`tax_agent/` 包结构归类。
+- 已完成：`InteractionMode` / `ResponseStrategy` 第一版，包含 `/chat`、`/chat/stream`、`/batch` route 级 mode 校验，以及 `progress_stream` 过滤 `answer.delta`。
 - 已补强：FastAPI `/chat`、`/batch`、`state/history` 路由测试；SQLite checkpoint 验证脚本 `part2-tax-agent/check_sqlite_checkpoint_persistence.py`。
 - 当前本机环境状态：`.venv` 已可运行 SQLite checkpoint 验证脚本；OpenGauss 仍待兼容性适配。
 - 可用默认路径：`CHECKPOINT_BACKEND=auto|sqlite|memory`、`LANGFUSE_ENABLED=0`，用于本地开发和单测；这不是 OpenGauss/Langfuse 最终 E2E 验收。
@@ -79,6 +80,7 @@ F003 已经证明税审 Agent 可以输出本地 audit trace，并能把 LangGra
 | FastAPI `/chat` 与 `/chat/stream` | project adapter | 将 Agent 包装为应用系统可调用服务。 |
 | FastAPI `/batch` 与 CLI `--batch` | project adapter | 显式承载旧批处理管道，不伪装为 DeepAgents skill。 |
 | SSE event projection | project adapter | 把 DeepAgents/LangGraph stream events 映射为稳定服务协议。 |
+| InteractionMode / ResponseStrategy | project adapter | 控制调用方需要的对外输出形态，不放进 DeepAgents/LangChain middleware。 |
 | 本地 Docker Compose 部署 Langfuse | demo-only scaffolding -> project adapter | 本地演示和低规模部署使用，生产部署不在本 feature 范围内。 |
 
 ## 范围内
@@ -204,7 +206,10 @@ GET  /threads/{thread_id}/history
 event: run.started
 data: {"session_id":"sess-001","trace_id":"trace-001","thread_id":"tax-thread-001"}
 
-event: agent.message.delta
+event: answer.started
+data: {"thread_id":"tax-thread-001"}
+
+event: answer.delta
 data: {"text":"..."}
 
 event: tool.started
@@ -213,15 +218,32 @@ data: {"name":"retrieve_tax_context"}
 event: tool.finished
 data: {"name":"retrieve_tax_context","source_ids":["vat-regulation"]}
 
-event: run.finished
+event: answer.finished
 data: {"answer":"...","citations":[]}
+
+event: run.finished
+data: {"thread_id":"tax-thread-001"}
 ```
 
 SSE 映射要求：
 
 - 不直接泄露不稳定的内部 Python 对象结构。
 - 对外事件名稳定，内部 DeepAgents/LangGraph event schema 变化时只改 adapter。
+- 协议层不使用 `stage.*`。可观察动作统一投影为 `run.*`、`answer.*`、`tool.*`、`skill.*`、`batch.*`。
+- `answer.delta` 是可选内容流，只表示回答文本增量；进度状态不要塞进 `answer.delta`。
 - stream 结束必须发 `run.finished`；异常必须发 `run.error` 并结束连接。
+
+已新增显式 `InteractionMode` / `ResponseStrategy` 参数，用于区分调用方期望的呈现方式：
+
+```text
+direct_text
+progress_stream
+answer_stream
+structured_final
+batch
+```
+
+该参数属于项目 adapter 层，负责校验 `/chat`、`/chat/stream`、结构化最终产物或 `/batch` 的对外表现；它不改变 DeepAgents 内部 tool、prompt、state 或 middleware 机制。第一版不新增消费者单入口 facade。
 
 `POST /batch` 为旧批处理流程的显式服务入口：
 
@@ -310,7 +332,7 @@ SSE 映射要求：
 ## 验收标准
 
 1. [ ] `/chat` 支持 `session_id`、`trace_id`、`thread_id`、`messages` 输入，并返回最终 answer/citations/checkpoint/observability。
-2. [ ] `/chat/stream` 能把内部事件转换为稳定 SSE：`run.started`、`agent.message.delta`、`tool.started`、`tool.finished`、`run.finished`、`run.error`。
+2. [ ] `/chat/stream` 能把内部事件转换为稳定 SSE：`run.started`、`answer.started`、`answer.delta`、`answer.finished`、`tool.started`、`tool.finished`、`run.finished`、`run.error`。
 3. [ ] 多 turn 调用能携带前序 `messages`，下一轮回答能使用当前对话上下文。
 4. [ ] 同一 `thread_id` 在 OpenGauss checkpoint 中可恢复最新 state。
 5. [ ] 服务重启后，用同一 `thread_id` 能继续对话，而不是重新开始。

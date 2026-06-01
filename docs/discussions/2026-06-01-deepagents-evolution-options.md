@@ -94,7 +94,7 @@ prompts/
 
 建议：
 
-只在 `stage_stream` 或复杂问题模式中启用，作为 `stage.started: reflection`，不要默认塞进所有请求。
+只在 `progress_stream`、`answer_stream` 或复杂问题模式中启用，并投影为可观察的 `tool.*` / `answer.*` / 项目层事件；不要新增抽象 `stage.*` 协议，也不要默认塞进所有请求。
 
 优先级：中。
 
@@ -182,22 +182,21 @@ SQLite 是数据库；如果服务默认 DB 文件名随进程启动变化，跨
 
 优先级：高。
 
-### 方向 B：阶段式 streaming
+### 方向 B：稳定 streaming 协议
 
 问题：
 
-当前 `/chat/stream` 可用，但对外仍偏事件转发，没有稳定的语义阶段协议。
+当前 `/chat/stream` 可用，但对外仍偏事件转发，需要稳定的产品协议。
 
 建议：
 
-- 新增 `StageEvent` 契约。
-- 将内部 LangGraph events 映射到阶段：
-  - planning
-  - tool_call
-  - reflection
-  - answering
-  - finished/error
-- 正常 answer token 仍可通过 `answer.delta` 输出。
+- 不新增 `StageEvent` 抽象。
+- 将内部 LangGraph events 映射到可观察动作域：
+  - `run.started` / `run.finished` / `run.error`
+  - `answer.started` / `answer.delta` / `answer.finished`
+  - `tool.started` / `tool.finished` / `tool.error`
+  - 后续需要时扩展 `skill.*`、`batch.*`
+- `answer.delta` 只表达回答文本增量，不承载“正在理解/正在规划”这类不可判定状态。
 
 收益：
 
@@ -218,7 +217,8 @@ structured response 和 streaming 都需要，但不能用一个固定路径覆�
 
 ```text
 mode=direct_text
-mode=stage_stream
+mode=progress_stream
+mode=answer_stream
 mode=structured_final
 mode=batch
 ```
@@ -307,7 +307,7 @@ Citation
 ### 近期讨论顺序
 
 1. SQLite checkpoint 跨重启是否作为下一轮实现目标。
-2. `/chat/stream` 阶段式协议的事件 contract。
+2. `/chat/stream` 稳定事件 contract。
 3. `InteractionMode` 的最小枚举和 API/harness 表达方式。
 4. batch 是否从同步接口升级为 job 语义。
 5. EvidenceProvider 和 prompt 文件化是否进入同一轮，还是分开做。
@@ -318,12 +318,12 @@ Citation
 
 ```text
 1. 稳定 SQLite checkpoint DB 路径 + 跨重启验证
-2. StageEvent / 阶段式 SSE contract
+2. 稳定 SSE contract
 3. InteractionMode 显式参数
 4. batch job/harness 确认草案
 5. EvidenceProvider 抽边界
 6. prompt 文件化
-7. think_tool / reflection stage
+7. think_tool / reflection 事件投影
 8. subagent YAML / fan-out
 ```
 
@@ -341,7 +341,7 @@ Citation
 ## 讨论问题
 
 1. 下一轮是否先做 SQLite checkpoint 跨重启验证？
-2. `/chat/stream` 对外事件是否采用 `stage.*` + `answer.*` 的协议？
+2. `/chat/stream` 对外事件是否采用 `run.*`、`answer.*`、`tool.*`、`skill.*`、`batch.*`，并明确不使用 `stage.*`？
 3. `InteractionMode` 是否先只做显式参数，不做自动识别？
 4. batch 是否需要从同步接口升级为异步 job？
 5. EvidenceProvider 是否作为独立小步，而不是和 RAG 升级绑定？

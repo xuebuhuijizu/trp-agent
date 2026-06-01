@@ -236,6 +236,7 @@ class AgentExecutor:
         final_messages: list[Any] = []
         reasoning_filter = ReasoningFilter()
         saw_tool_event = False
+        answer_started = False
 
         async for raw_event in self._astream_events(payload, config):
             normalized = normalize_stream_event(raw_event)
@@ -244,12 +245,18 @@ class AgentExecutor:
                 if isinstance(output, dict) and isinstance(output.get("messages"), list):
                     final_messages = output["messages"]
                 continue
-            if normalized["event"] == "agent.message.delta":
+            if normalized["event"] == "answer.delta":
                 text = reasoning_filter.filter(normalized["data"]["text"])
                 if not text:
                     continue
                 normalized["data"]["text"] = text
                 answer_parts.append(text)
+                if not answer_started:
+                    yield {
+                        "event": "answer.started",
+                        "data": {"thread_id": request.thread_id},
+                    }
+                    answer_started = True
             if normalized["event"] == "tool.finished":
                 saw_tool_event = True
                 citations.extend(normalized["data"].get("citations", []))
@@ -287,11 +294,22 @@ class AgentExecutor:
                 },
             }
             return
+        if not answer_started:
+            yield {
+                "event": "answer.started",
+                "data": {"thread_id": request.thread_id},
+            }
         yield {
-            "event": "run.finished",
+            "event": "answer.finished",
             "data": {
                 "answer": answer,
                 "citations": citations,
+                "thread_id": request.thread_id,
+            },
+        }
+        yield {
+            "event": "run.finished",
+            "data": {
                 "thread_id": request.thread_id,
             },
         }

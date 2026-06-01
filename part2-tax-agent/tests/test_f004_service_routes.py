@@ -83,6 +83,40 @@ def test_chat_route_accepts_async_executor_factory():
     assert response.json()["checkpoint"]["backend_type"] == "sqlite"
 
 
+def test_chat_route_rejects_stream_interaction_mode():
+    class FakeExecutor:
+        async def execute_turn(self, request):
+            raise AssertionError("invalid interaction mode should be rejected before execution")
+
+    payload = {**_chat_payload(), "interaction_mode": "answer_stream"}
+    app = create_app(lambda: FakeExecutor())
+
+    with TestClient(app) as client:
+        response = client.post("/chat", json=payload)
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "InvalidInteractionMode"
+
+
+def test_chat_route_accepts_structured_final_interaction_mode():
+    class FakeExecutor:
+        checkpoint_backend_type = "memory"
+        observability_provider = "none"
+
+        async def execute_turn(self, request):
+            assert request.interaction_mode == "structured_final"
+            return SimpleNamespace(answer="structured answer", citations=[])
+
+    payload = {**_chat_payload(), "interaction_mode": "structured_final"}
+    app = create_app(lambda: FakeExecutor())
+
+    with TestClient(app) as client:
+        response = client.post("/chat", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "structured answer"
+
+
 def test_state_and_history_routes_use_executor_state_accessors():
     class FakeExecutor:
         def get_state(self, thread_id):
@@ -137,6 +171,31 @@ def test_batch_route_writes_outputs_from_uploaded_input_path(tmp_path):
     assert payload["total_questions"] == 1
     assert Path(payload["output_paths"]["markdown"]).exists()
     assert Path(payload["output_paths"]["json"]).exists()
+
+
+def test_batch_route_rejects_non_batch_interaction_mode(tmp_path):
+    input_file = tmp_path / "questions.txt"
+    input_file.write_text("What is VAT?", encoding="utf-8")
+
+    class FakeExecutor:
+        output_dir = str(tmp_path / "output")
+
+    app = create_app(lambda: FakeExecutor())
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/batch",
+            json={
+                "session_id": "sess-batch-route",
+                "trace_id": "trace-batch-route",
+                "input_file": str(input_file),
+                "thread_strategy": "per_question",
+                "interaction_mode": "answer_stream",
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "InvalidInteractionMode"
 
 
 def test_sqlite_checkpoint_script_reports_missing_dependency_when_not_installed(tmp_path):
