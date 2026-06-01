@@ -11,14 +11,15 @@ created: 2026-05-29
 > 状态: in-progress
 > 负责人: 宪宪
 
-## 当前实现状态（2026-05-29）
+## 当前实现状态（2026-06-01）
 
 当前不降低 F004 的最终目标：生产级持久化仍以 OpenGauss checkpoint 为目标，主观测路径仍以 Langfuse 为目标。但在铲屎官本机 OpenGauss 暂不可用、Langfuse 仍在安装期间，项目先完成不依赖这两个外部运行时的部分：
 
 - 已完成：多 turn 对话契约、`execute_turn(...)` 主路径、显式 `/batch` 路由、FastAPI `3004` 服务入口、`/chat/stream` 基于 `astream_events(version="v2")` 的 SSE 事件投影、`tax_agent/` 包结构归类。
 - 已补强：FastAPI `/chat`、`/batch`、`state/history` 路由测试；SQLite checkpoint 验证脚本 `part2-tax-agent/check_sqlite_checkpoint_persistence.py`。
-- 当前本机环境状态：`.venv` 尚未安装 `langgraph-checkpoint-sqlite`、`langgraph-checkpoint-postgres`，SQLite/OpenGauss 真实持久化脚本会明确提示依赖缺失，不静默冒充验收通过。
-- 可用默认路径：`CHECKPOINT_BACKEND=auto|memory`、`LANGFUSE_ENABLED=0`，用于本地开发和单测；这不是 OpenGauss/Langfuse 最终 E2E 验收。
+- 当前本机环境状态：`.venv` 已可运行 SQLite checkpoint 验证脚本；OpenGauss 仍待兼容性适配。
+- 可用默认路径：`CHECKPOINT_BACKEND=auto|sqlite|memory`、`LANGFUSE_ENABLED=0`，用于本地开发和单测；这不是 OpenGauss/Langfuse 最终 E2E 验收。
+- 已稳定：服务级 SQLite checkpoint DB 路径固定为 `output/checkpoints/service.sqlite`，避免服务重启后因随机 `tax-run-*` 文件名误判恢复失败。
 - 待环境就绪：OpenGauss 连接/setup/state history/replay 验证（注：`langgraph-checkpoint-postgres` 当前版本与 openGauss 6.0.5 SQL 方言不完全兼容，需等待 upstream 适配或自定义 adapter）；Langfuse 本地部署、callback metadata/tags、trace UI 可见性验证；完整 E2E 演示文档。
 
 ## 为什么
@@ -115,8 +116,10 @@ F003 已经证明税审 Agent 可以输出本地 audit trace，并能把 LangGra
 当前使用 SQLite 作为本地持久化 checkpoint。
 
 - `CHECKPOINT_BACKEND=auto` 会优先尝试 `SqliteSaver`，不可用时降级为 `InMemorySaver`。
-- 验证脚本：`part2-tax-agent/check_sqlite_checkpoint_persistence.py`（已验证通过，`history_count: 3`）。
-- SQLite 文件输出至 `output/checkpoints/<thread_id>.sqlite`。
+- `CHECKPOINT_BACKEND=sqlite` 会显式要求 SQLite checkpointer 可用，不可用时失败，不静默冒充持久化。
+- 验证脚本：`part2-tax-agent/check_sqlite_checkpoint_persistence.py`（2026-06-01 已验证通过，`history_count: 3`）。
+- 服务级 SQLite 文件输出至 `output/checkpoints/service.sqlite`；请求级 `thread_id` 仍作为 LangGraph configurable key，用于区分 state/history。
+- 显式传入 `run_id` 的旧 CLI/脚本路径仍可生成独立 run-scoped checkpoint 文件。
 - SQLite 可满足本地开发和内网部署需求，不需要外部数据库服务。
 
 ### 3. OpenGauss checkpoint（待 upstream 适配）
@@ -262,7 +265,14 @@ SSE 映射要求：
 - CLI 路径复用同一 executor，不再复制 prompt 拼装逻辑。
 - 测试覆盖多 turn messages 传入、同一 `thread_id` 稳定使用。
 
-### Phase 2: OpenGauss checkpoint
+### Phase 2: SQLite checkpoint 基线
+
+- 固定服务级 SQLite DB 路径为 `output/checkpoints/service.sqlite`。
+- 用同一 DB、不同 `thread_id` 验证 LangGraph state/history 隔离。
+- 用验证脚本确认关闭并重新打开 SQLite checkpointer 后，state/history 仍可读取。
+- 真正服务重启 E2E 验证需由铲屎官授权 runtime 启停后执行。
+
+### Phase 3: OpenGauss checkpoint
 
 - 新增 checkpoint backend 配置。
 - 接入 `PostgresSaver` / `AsyncPostgresSaver`。
@@ -270,14 +280,14 @@ SSE 映射要求：
 - 验证进程重启后通过 `thread_id` 读取 state/history。
 - 验证从历史 checkpoint replay。
 
-### Phase 3: Langfuse observability
+### Phase 4: Langfuse observability
 
 - 新增 Langfuse 配置与 callback 注入。
 - 将本地 `AuditTraceRecorder` 降级为可选 fallback。
 - 新增 Langfuse 本地部署说明和 health check。
 - 测试 callback config、metadata/tags、flush 行为。
 
-### Phase 4: FastAPI 服务化与 SSE
+### Phase 5: FastAPI 服务化与 SSE
 
 - 新增 FastAPI app。
 - 实现 `/chat`、`/chat/stream`、`/batch`、`/health`、state/history 查询接口。
@@ -285,7 +295,7 @@ SSE 映射要求：
 - 增加接口测试和流式协议测试。
 - 增加 batch 路由测试，确保旧批处理流程由路由显式选择，而不是由 skill 触发。
 
-### Phase 5: E2E 验证与演示文档
+### Phase 6: E2E 验证与演示文档
 
 - 更新 `docs/guides/demo-walkthrough.md`。
 - 产出 E2E 验证脚本：

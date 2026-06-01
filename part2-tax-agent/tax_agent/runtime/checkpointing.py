@@ -14,11 +14,16 @@ SQLite package is unavailable.
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-import uuid
+
+SERVICE_CHECKPOINT_ID = "service"
 
 
 def _safe_filename(value: str) -> str:
     return "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in value)
+
+
+def _checkpoint_identity(run_id: str | None) -> str:
+    return run_id or SERVICE_CHECKPOINT_ID
 
 
 @dataclass
@@ -56,7 +61,7 @@ async def build_async_checkpoint_config(
     dsn: str | None = None,
 ) -> CheckpointConfig:
     del dsn
-    thread_id = run_id or f"tax-run-{uuid.uuid4().hex}"
+    thread_id = _checkpoint_identity(run_id)
     backend_type = backend_type or "auto"
     if backend_type not in {"auto", "sqlite", "memory"}:
         raise ValueError(f"Unsupported checkpoint backend: {backend_type}")
@@ -107,7 +112,7 @@ def build_checkpoint_config(
     backend_type: str | None = None,
     dsn: str | None = None,
 ) -> CheckpointConfig:
-    thread_id = run_id or f"tax-run-{uuid.uuid4().hex}"
+    thread_id = _checkpoint_identity(run_id)
     backend_type = backend_type or "auto"
     if backend_type == "opengauss":
         if not dsn:

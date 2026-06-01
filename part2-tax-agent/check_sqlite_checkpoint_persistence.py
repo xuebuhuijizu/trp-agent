@@ -15,6 +15,8 @@ import sys
 from pathlib import Path
 from typing import TypedDict
 
+SERVICE_SQLITE_FILENAME = "service.sqlite"
+
 
 class DemoState(TypedDict):
     messages: list[str]
@@ -44,11 +46,15 @@ def _build_demo_graph(checkpointer):
     return builder.compile(checkpointer=checkpointer)
 
 
+def _sqlite_checkpoint_path(output_dir: str | Path) -> Path:
+    return Path(output_dir) / "checkpoints" / SERVICE_SQLITE_FILENAME
+
+
 def verify_sqlite_checkpoint(output_dir: str | Path, thread_id: str) -> dict:
     sqlite_saver = _load_sqlite_saver()
-    checkpoint_dir = Path(output_dir) / "checkpoints"
+    db_path = _sqlite_checkpoint_path(output_dir)
+    checkpoint_dir = db_path.parent
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    db_path = checkpoint_dir / f"{thread_id}.sqlite"
     config = {"configurable": {"thread_id": thread_id}}
 
     with sqlite_saver.from_conn_string(str(db_path)) as checkpointer:
@@ -107,4 +113,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-

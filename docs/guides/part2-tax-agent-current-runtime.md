@@ -112,4 +112,5 @@ app.py
 - 新增主路径能力时，优先放进 `runtime/`、`service/`、`domain/`、`io/` 中已有边界。
 - 兼容旧流程时，必须明确写在 `batch_runtime.py` 或 `legacy/`，不能混入主对话入口。
 - OpenGauss 和 Langfuse 是增强项；SQLite checkpoint 和 `observability=none` 是当前可运行基线。
+- 默认服务级 SQLite DB 是 `output/checkpoints/service.sqlite`；请求里的 `thread_id` 只作为 LangGraph configurable key，不再决定服务 DB 文件名。
 - 如果一个文件无法回答“谁调用我、为什么存在”，需要补文件头或移动目录。

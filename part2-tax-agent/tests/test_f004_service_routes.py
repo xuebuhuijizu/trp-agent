@@ -150,3 +150,9 @@ def test_sqlite_checkpoint_script_reports_missing_dependency_when_not_installed(
     result = sqlite_check.main(["--output", str(tmp_path), "--thread-id", "thread-sqlite"])
 
     assert result == 2
+
+
+def test_sqlite_checkpoint_script_uses_service_sqlite_path(tmp_path):
+    import check_sqlite_checkpoint_persistence as sqlite_check
+
+    assert sqlite_check._sqlite_checkpoint_path(tmp_path) == tmp_path / "checkpoints" / "service.sqlite"

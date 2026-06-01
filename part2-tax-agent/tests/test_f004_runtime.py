@@ -8,7 +8,7 @@ import pytest
 from tax_agent.config import AgentConfig
 from tax_agent.domain.domain_knowledge import analyze_tax_context
 from tax_agent.runtime.agent_executor import AgentExecutor
-from tax_agent.runtime.checkpointing import build_checkpoint_config
+from tax_agent.runtime.checkpointing import build_async_checkpoint_config, build_checkpoint_config
 from tax_agent.runtime.conversation import ConversationMessage, ConversationRequest
 
 
@@ -90,6 +90,29 @@ def test_execute_turn_passes_messages_and_thread_id_to_agent():
     assert result.answer == "structured answer"
     assert result.thread_id == "thread-abc"
     assert {"增值税", "进项税额"}.issubset({match["term"] for match in result.domain_analysis["terms"]})
+
+
+def test_checkpoint_config_uses_stable_service_sqlite_path_by_default(tmp_path):
+    config = build_checkpoint_config(output_dir=tmp_path, backend_type="memory")
+
+    assert config.thread_id == "service"
+    assert config.invoke_config["configurable"]["thread_id"] == "service"
+
+
+def test_checkpoint_config_uses_run_id_for_explicit_run_scoped_path(tmp_path):
+    config = build_checkpoint_config(output_dir=tmp_path, run_id="run-123", backend_type="memory")
+
+    assert config.thread_id == "run-123"
+    assert config.invoke_config["configurable"]["thread_id"] == "run-123"
+
+
+@pytest.mark.asyncio
+async def test_async_checkpoint_config_uses_stable_service_sqlite_path_by_default(tmp_path):
+    config = await build_async_checkpoint_config(output_dir=tmp_path, backend_type="sqlite")
+
+    assert config.thread_id == "service"
+    assert config.backend_type == "sqlite"
+    assert config.path == str(tmp_path / "checkpoints" / "service.sqlite")
 
 
 def test_opengauss_checkpoint_does_not_fallback_when_dependency_missing(tmp_path, monkeypatch):

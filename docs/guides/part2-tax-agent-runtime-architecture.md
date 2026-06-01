@@ -148,6 +148,14 @@ python check_opengauss_compat.py
 python check_sqlite_checkpoint_persistence.py --output output --thread-id demo-sqlite-thread
 ```
 
+SQLite 验证脚本和服务默认配置都会使用服务级 DB：
+
+```text
+output/checkpoints/service.sqlite
+```
+
+`thread_id` 仍然必须由调用方稳定传入，但它是 LangGraph checkpoint state/history 的 configurable key，不再用于生成服务级 SQLite 文件名。
+
 `POST /chat` 示例：
 
 ```json
