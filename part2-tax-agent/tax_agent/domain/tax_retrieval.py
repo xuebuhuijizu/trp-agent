@@ -1,3 +1,10 @@
+"""Compatibility helpers for the pre-F005 tax retrieval shape.
+
+New code should start from `tax_agent.domain.reference_layer` and the
+`find_tax_authorities` tool. This module only keeps the old demo tool name and
+legacy payload parsing alive while tests and historical examples migrate.
+"""
+
 import json
 from typing import Any
 

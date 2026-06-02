@@ -1,4 +1,4 @@
-from types import SimpleNamespace
+﻿from types import SimpleNamespace
 
 import pytest
 
@@ -142,7 +142,7 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
                 "event": "on_tool_end",
                 "name": "find_tax_authorities",
                 "data": {
-                    "output": '{"citations":[{"citation_id":"local_tax_authorities:vat-regulation","source_id":"vat-regulation","source_type":"tax_authority","provider_id":"local_tax_authorities","title":"VAT","locator":null,"snippet":"VAT","confidence":0.9,"retrieved_at":null,"metadata":{}}]}'
+                    "output": '{"citations":[{"citation_id":"local_tax_authorities:vat-regulation","source_id":"vat-regulation","source_type":"law","provider_id":"local_tax_authorities","title":"VAT","locator":null,"snippet":"VAT","confidence":0.9,"retrieved_at":null,"metadata":{}}]}'
                 },
             }
 
@@ -186,7 +186,7 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
                     {
                         "citation_id": "local_tax_authorities:vat-regulation",
                         "source_id": "vat-regulation",
-                        "source_type": "tax_authority",
+                        "source_type": "law",
                         "provider_id": "local_tax_authorities",
                         "title": "VAT",
                         "locator": None,
@@ -206,7 +206,7 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
                         {
                             "citation_id": "local_tax_authorities:vat-regulation",
                             "source_id": "vat-regulation",
-                            "source_type": "tax_authority",
+                            "source_type": "law",
                             "provider_id": "local_tax_authorities",
                             "title": "VAT",
                             "locator": None,
@@ -227,7 +227,7 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
                                 {
                                     "citation_id": "local_tax_authorities:vat-regulation",
                                     "source_id": "vat-regulation",
-                                    "source_type": "tax_authority",
+                                    "source_type": "law",
                                     "provider_id": "local_tax_authorities",
                                     "title": "VAT",
                                     "locator": None,
@@ -248,3 +248,4 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
             },
         },
     ]
+

@@ -114,3 +114,17 @@ app.py
 - OpenGauss 和 Langfuse 是增强项；SQLite checkpoint 和 `observability=none` 是当前可运行基线。
 - 默认服务级 SQLite DB 是 `output/checkpoints/service.sqlite`；请求里的 `thread_id` 只作为 LangGraph configurable key，不再决定服务 DB 文件名。
 - 如果一个文件无法回答“谁调用我、为什么存在”，需要补文件头或移动目录。
+
+## F005 后的引用层阅读补充
+
+F005 之后，法规/政策等外部引用材料的主路径是 `tax_agent/domain/reference_layer.py`。
+
+新人阅读顺序建议：
+
+1. 先读 `tax_agent/domain/reference_layer.py`，理解 `ReferenceProvider`、`ReferenceManager`、`ReferenceBundle`、`Citation` 和 `find_tax_authorities`。
+2. 再读 `tax_agent/runtime/agent_executor.py`，看 `find_tax_authorities` 如何注册为 DeepAgents 主路径 tool。
+3. 最后读 `tax_agent/runtime/stream_events.py`，看 tool output 如何进入 `tool.finished` / `answer.finished` 的 citations。
+
+`tax_agent/domain/tax_retrieval.py` 不是新主路径。它只保留旧演讲 demo 的 `retrieve_tax_context` 名称和历史 `sources` payload 兼容解析，避免旧消息或历史测试丢失 citation。
+
+`tax_agent/legacy/` 也不是新主路径。它只保留历史实验、兼容测试和对照材料；当前 planning path 在 `tax_agent/runtime/agent_executor.py`，当前 reference path 在 `tax_agent/domain/reference_layer.py`。

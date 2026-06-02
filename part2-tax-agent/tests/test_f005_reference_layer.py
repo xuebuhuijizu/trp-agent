@@ -18,7 +18,7 @@ def test_local_tax_authority_provider_returns_standard_reference_bundle():
     assert bundle.items
     citation = bundle.citations[0]
     assert isinstance(citation, Citation)
-    assert citation.source_type == "tax_authority"
+    assert citation.source_type == "law"
     assert citation.provider_id == "local_tax_authorities"
     assert citation.source_id
     assert citation.title
@@ -55,7 +55,7 @@ def test_extract_citations_reads_standard_reference_bundle_messages():
             {
                 "citation_id": "local_tax_authorities:vat-regulation",
                 "source_id": "vat-regulation",
-                "source_type": "tax_authority",
+                "source_type": "law",
                 "provider_id": "local_tax_authorities",
                 "title": "增值税暂行条例",
                 "locator": None,
@@ -72,3 +72,16 @@ def test_extract_citations_reads_standard_reference_bundle_messages():
     )
 
     assert citations == payload["citations"]
+
+
+def test_extract_citations_keeps_legacy_sources_payload_compatible():
+    citations = extract_citations_from_messages(
+        [
+            {
+                "name": "retrieve_tax_context",
+                "content": '{"sources": [{"source_id": "vat-regulation", "title": "VAT Regulation"}]}',
+            }
+        ]
+    )
+
+    assert citations == [{"source_id": "vat-regulation", "title": "VAT Regulation"}]

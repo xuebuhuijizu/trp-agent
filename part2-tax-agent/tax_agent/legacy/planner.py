@@ -2,6 +2,7 @@
 
 F004 uses DeepAgents native planning through the multi-turn runtime. This module
 is kept for compatibility tests and historical examples, not for the main path.
+Read `tax_agent/runtime/agent_executor.py` for the current planning path.
 """
 
 from typing import Protocol

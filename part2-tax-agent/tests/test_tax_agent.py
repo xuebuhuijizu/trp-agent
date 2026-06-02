@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import importlib
 import sys
 import tempfile
@@ -291,7 +291,7 @@ class TestAgentExecutor:
                     "messages": [
                         {
                             "name": "find_tax_authorities",
-                            "content": '{"citations": [{"citation_id": "local_tax_authorities:vat-regulation", "source_id": "vat-regulation", "source_type": "tax_authority", "provider_id": "local_tax_authorities", "title": "增值税暂行条例", "locator": null, "snippet": "VAT", "confidence": 0.9, "retrieved_at": null, "metadata": {}}]}',
+                            "content": '{"citations": [{"citation_id": "local_tax_authorities:vat-regulation", "source_id": "vat-regulation", "source_type": "law", "provider_id": "local_tax_authorities", "title": "增值税暂行条例", "locator": null, "snippet": "VAT", "confidence": 0.9, "retrieved_at": null, "metadata": {}}]}',
                         },
                         {"content": "final answer"},
                     ]
@@ -309,7 +309,7 @@ class TestAgentExecutor:
             {
                 "citation_id": "local_tax_authorities:vat-regulation",
                 "source_id": "vat-regulation",
-                "source_type": "tax_authority",
+                "source_type": "law",
                 "provider_id": "local_tax_authorities",
                 "title": "增值税暂行条例",
                 "locator": None,
