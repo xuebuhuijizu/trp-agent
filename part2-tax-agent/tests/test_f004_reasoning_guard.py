@@ -27,6 +27,14 @@ async def test_stream_turn_suppresses_reasoning_only_output():
 
     assert events == [
         {
+            "event": "run.started",
+            "data": {
+                "session_id": "sess",
+                "trace_id": "trace",
+                "thread_id": "thread",
+            },
+        },
+        {
             "event": "run.error",
             "data": {
                 "error": "ModelOutputError",

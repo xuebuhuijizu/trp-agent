@@ -162,6 +162,14 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
     assert fake_agent.config["metadata"]["trace_id"] == "trace-stream"
     assert fake_agent.version == "v2"
     assert events == [
+        {
+            "event": "run.started",
+            "data": {
+                "session_id": "sess-stream",
+                "trace_id": "trace-stream",
+                "thread_id": "thread-stream",
+            },
+        },
         {"event": "answer.started", "data": {"thread_id": "thread-stream"}},
         {"event": "answer.delta", "data": {"text": "hello "}},
         {"event": "answer.delta", "data": {"text": "world"}},
@@ -182,6 +190,15 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
                 "answer": "hello world",
                 "citations": [{"source_id": "vat-regulation", "title": "VAT"}],
                 "thread_id": "thread-stream",
+                "artifact": {
+                    "kind": "TaxAnswer",
+                    "data": {
+                        "question": "stream this answer",
+                        "intent": "definition",
+                        "answer": "hello world",
+                        "citations": [{"source_id": "vat-regulation", "title": "VAT"}],
+                    },
+                },
             },
         },
         {

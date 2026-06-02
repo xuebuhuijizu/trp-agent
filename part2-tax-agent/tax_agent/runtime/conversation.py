@@ -49,5 +49,6 @@ class ChatResponse(BaseModel):
     thread_id: str
     answer: str
     citations: list[dict] = Field(default_factory=list)
+    artifact: dict | None = None
     checkpoint: dict = Field(default_factory=dict)
     observability: dict = Field(default_factory=dict)

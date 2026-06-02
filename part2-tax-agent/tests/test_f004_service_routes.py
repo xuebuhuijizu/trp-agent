@@ -105,7 +105,19 @@ def test_chat_route_accepts_structured_final_interaction_mode():
 
         async def execute_turn(self, request):
             assert request.interaction_mode == "structured_final"
-            return SimpleNamespace(answer="structured answer", citations=[])
+            return SimpleNamespace(
+                answer="structured answer",
+                citations=[],
+                artifact={
+                    "kind": "TaxAnswer",
+                    "data": {
+                        "question": "hello",
+                        "intent": "definition",
+                        "answer": "structured answer",
+                        "citations": [],
+                    },
+                },
+            )
 
     payload = {**_chat_payload(), "interaction_mode": "structured_final"}
     app = create_app(lambda: FakeExecutor())
@@ -115,6 +127,15 @@ def test_chat_route_accepts_structured_final_interaction_mode():
 
     assert response.status_code == 200
     assert response.json()["answer"] == "structured answer"
+    assert response.json()["artifact"] == {
+        "kind": "TaxAnswer",
+        "data": {
+            "question": "hello",
+            "intent": "definition",
+            "answer": "structured answer",
+            "citations": [],
+        },
+    }
 
 
 def test_state_and_history_routes_use_executor_state_accessors():

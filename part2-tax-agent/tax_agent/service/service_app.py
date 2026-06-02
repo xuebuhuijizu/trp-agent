@@ -58,7 +58,7 @@ def create_app(executor_factory: ExecutorFactory | None = None):
     @app.post("/chat")
     async def chat(request: ConversationRequest):
         try:
-            resolve_response_strategy("chat", request.interaction_mode)
+            strategy = resolve_response_strategy("chat", request.interaction_mode)
         except InvalidInteractionMode as exc:
             return invalid_interaction_mode_response(exc)
         executor = await _resolve_executor(factory)
@@ -75,20 +75,20 @@ def create_app(executor_factory: ExecutorFactory | None = None):
                 },
                 status_code=502,
             )
-        return utf8_json(
-            ChatResponse(
-                session_id=request.session_id,
-                trace_id=request.trace_id,
-                thread_id=request.thread_id,
-                answer=result.answer,
-                citations=result.citations,
-                checkpoint={
-                    "backend_type": executor.checkpoint_backend_type,
-                    "thread_id": request.thread_id,
-                },
-                observability={"provider": executor.observability_provider},
-            ).model_dump()
+        response = ChatResponse(
+            session_id=request.session_id,
+            trace_id=request.trace_id,
+            thread_id=request.thread_id,
+            answer=result.answer,
+            citations=result.citations,
+            artifact=getattr(result, "artifact", None) if strategy.final_shape == "structured" else None,
+            checkpoint={
+                "backend_type": executor.checkpoint_backend_type,
+                "thread_id": request.thread_id,
+            },
+            observability={"provider": executor.observability_provider},
         )
+        return utf8_json(response.model_dump(exclude_none=True))
 
     @app.post("/chat/stream")
     async def chat_stream(request: ConversationRequest):

@@ -47,6 +47,12 @@ Agent 内部怎么推理？
 7. facade 的 `Accept` header / `interaction_mode` 分流机制先不考虑。
 8. `progress_stream` 的 `answer.started` payload 暂时不加固定 `status` 字段。
 9. `TaxAnswer` 是否演进为更强 artifact schema 之后再考虑。
+10. 第一版 `/chat/stream` 需要稳定开始/结束 payload schema：`run.started` 暴露 `session_id`、`trace_id`、`thread_id`；`answer.started` 暴露 `thread_id`；`answer.finished` 暴露 `thread_id`、`answer`、`citations`、`artifact`。
+11. 第一版失败边界不细分；对外只用 `run.error` 作为最终失败归类。
+12. 第一版事件顺序只保证 `run.started` 在 `answer.started` 前，`answer.finished` 在 `run.finished` 前；其他 `tool.*` 事件按 Agent 实际发生顺序投影，不保证固定位置。
+13. `skill.*` 暂不进入第一版 `/chat/stream` 协议，等有真实可观察 skill 动作后再接入。
+14. `batch.*` 不属于 `/chat/stream` 第一版协议；未来如果需要 batch SSE，应放在 `/batch` job 语义里设计。
+15. 最终结构化产物需要对外暴露为 `artifact`，第一版使用 `{"kind":"TaxAnswer","data":{...}}` 包装现有 `TaxAnswer`。
 
 ## 实现状态（2026-06-02）
 
@@ -58,6 +64,8 @@ Agent 内部怎么推理？
 4. `/chat/stream` 允许 `answer_stream`、`progress_stream`，拒绝 `structured_final`。
 5. `/batch` 只允许 absent 或 `batch`。
 6. `progress_stream` 过滤 `answer.delta`，保留 `answer.started` / `answer.finished`。
+7. `/chat/stream` 暴露 `run.started` / `run.finished` 运行边界。
+8. `answer.finished` 暴露 `artifact.kind=TaxAnswer` 与 `artifact.data`。
 
 未实现且已暂缓：
 
@@ -461,7 +469,47 @@ run.finished
 run.error
 ```
 
-`skill.*` 与 `batch.*` 等有真实可观察动作后再接入，不提前伪造。
+`skill.*` 与 `batch.*` 等有真实可观察动作后再接入，不提前伪造。其中 `batch.*` 不属于 `/chat/stream` 协议；未来如需批处理流式进度，应在 `/batch` job/SSE 协议中单独设计。
+
+### 第一版稳定 payload schema
+
+```text
+event: run.started
+data: {"session_id":"sess-001","trace_id":"trace-001","thread_id":"thread-001"}
+
+event: answer.started
+data: {"thread_id":"thread-001"}
+
+event: answer.finished
+data: {
+  "thread_id": "thread-001",
+  "answer": "...",
+  "citations": [],
+  "artifact": {
+    "kind": "TaxAnswer",
+    "data": {
+      "question": "...",
+      "intent": "definition",
+      "answer": "...",
+      "citations": []
+    }
+  }
+}
+
+event: run.finished
+data: {"thread_id":"thread-001"}
+
+event: run.error
+data: {"error":"ModelOutputError","message":"...","thread_id":"thread-001"}
+```
+
+第一版只承诺以下顺序：
+
+1. `run.started` 在 `answer.started` 之前。
+2. `answer.finished` 在 `run.finished` 之前。
+3. `run.error` 是失败终止事件。
+
+其他 `tool.*` 事件按 Agent 实际调用顺序投影，不保证固定位置。
 
 ## 非目标
 

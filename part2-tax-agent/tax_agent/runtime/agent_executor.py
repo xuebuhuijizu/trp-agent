@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from tax_agent.config import AgentConfig
 from tax_agent.domain.domain_knowledge import analyze_tax_context, analyze_tax_question
-from tax_agent.domain.intent_classifier import ClassifiedQuestion
+from tax_agent.domain.intent_classifier import ClassifiedQuestion, IntentClassifier
 from tax_agent.domain.tax_retrieval import extract_citations_from_messages, retrieve_tax_context
 from tax_agent.runtime.checkpointing import (
     CheckpointConfig,
@@ -70,6 +70,7 @@ class ExecutionResult:
     tool_events: list[dict] = field(default_factory=list)
     domain_analysis: dict = field(default_factory=dict)
     skills: list[str] = field(default_factory=list)
+    artifact: dict = field(default_factory=dict)
     session_id: str | None = None
     trace_id: str | None = None
     thread_id: str | None = None
@@ -212,6 +213,7 @@ class AgentExecutor:
             tool_events=self._collect_tool_events(messages),
             domain_analysis=domain_analysis,
             skills=self._skills_from_domain_analysis(domain_analysis),
+            artifact=self._tax_answer_artifact(request, answer, citations),
             session_id=request.session_id,
             trace_id=request.trace_id,
             thread_id=request.thread_id,
@@ -237,6 +239,15 @@ class AgentExecutor:
         reasoning_filter = ReasoningFilter()
         saw_tool_event = False
         answer_started = False
+
+        yield {
+            "event": "run.started",
+            "data": {
+                "session_id": request.session_id,
+                "trace_id": request.trace_id,
+                "thread_id": request.thread_id,
+            },
+        }
 
         async for raw_event in self._astream_events(payload, config):
             normalized = normalize_stream_event(raw_event)
@@ -305,6 +316,7 @@ class AgentExecutor:
                 "answer": answer,
                 "citations": citations,
                 "thread_id": request.thread_id,
+                "artifact": self._tax_answer_artifact(request, answer, citations),
             },
         }
         yield {
@@ -370,6 +382,29 @@ class AgentExecutor:
 3. 回答必须结构化，并引用检索工具返回的 source_id/title。
 4. 对税审问题使用 analyze_tax_question 获取术语、场景、历史问题和质询意图分析。
 5. 不要输出 <think>...</think> 或其他内部推理标签。"""
+
+    @staticmethod
+    def _tax_answer_artifact(request: ConversationRequest, answer: str, citations: list[dict]) -> dict:
+        question = AgentExecutor._last_user_content(request.to_agent_messages())
+        intent = IntentClassifier._rule_based(question)
+        artifact = TaxAnswer(
+            question=question,
+            intent=intent,
+            answer=answer,
+            citations=citations,
+        )
+        return {"kind": "TaxAnswer", "data": artifact.model_dump()}
+
+    @staticmethod
+    def _last_user_content(messages: list[Any]) -> str:
+        for message in reversed(messages):
+            role = message.get("role") if isinstance(message, dict) else getattr(message, "role", None)
+            if role != "user":
+                continue
+            content = message.get("content", "") if isinstance(message, dict) else getattr(message, "content", "")
+            if content:
+                return str(content)
+        return ""
 
     @staticmethod
     def _last_content(messages: list[Any]) -> str:
