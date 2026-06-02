@@ -11,3 +11,17 @@ output/
 .pytest_tmp*/
 .codex-tmp/
 .env
+
+# Local AI / IDE collaboration state
+.cat-cafe/
+.claude/
+.codex/
+.gemini/
+.kimi/
+.idea/
+
+# Migration snapshots and one-off debug payloads
+packages/
+*.zip
+chat-stream.json
+ai-projectpoc-demo.codex-tmppytest-cache/

@@ -7,3 +7,4 @@ uvicorn>=0.30
 langfuse>=4.0
 langgraph-checkpoint-sqlite>=2.0
 aiosqlite>=0.20
+python-dotenv>=1.0
