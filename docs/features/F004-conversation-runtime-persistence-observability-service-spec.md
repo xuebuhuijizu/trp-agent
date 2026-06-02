@@ -8,19 +8,24 @@ created: 2026-05-29
 
 # F004: 对话运行时、持久化、观测与服务化
 
-> 状态: in-progress
+> 状态: current-stage-closed（2026-06-02）
 > 负责人: 宪宪
 
-## 当前实现状态（2026-06-01）
+## 当前实现状态（2026-06-02）
 
-当前不降低 F004 的最终目标：生产级持久化仍以 OpenGauss checkpoint 为目标，主观测路径仍以 Langfuse 为目标。但在铲屎官本机 OpenGauss 暂不可用、Langfuse 仍在安装期间，项目先完成不依赖这两个外部运行时的部分：
+当前阶段已收口。收口范围是：本地可运行服务基线、SQLite checkpoint 基线、FastAPI 服务入口、稳定 `/chat/stream` 第一版协议、`InteractionMode` / `ResponseStrategy` 显式入口语义。
+
+这不降低 F004 的最终目标：生产级持久化仍以 OpenGauss checkpoint 为目标，主观测路径仍以 Langfuse 为目标。但在铲屎官本机 OpenGauss 暂不可用、Langfuse 仍在安装期间，本阶段先完成不依赖这两个外部运行时的可验证基线：
 
 - 已完成：多 turn 对话契约、`execute_turn(...)` 主路径、显式 `/batch` 路由、FastAPI `3004` 服务入口、`/chat/stream` 基于 `astream_events(version="v2")` 的 SSE 事件投影、`tax_agent/` 包结构归类。
 - 已完成：`InteractionMode` / `ResponseStrategy` 第一版，包含 `/chat`、`/chat/stream`、`/batch` route 级 mode 校验，以及 `progress_stream` 过滤 `answer.delta`。
+- 已完成：`/chat/stream` 第一版稳定 payload schema，包含 `run.started`、`answer.started`、`answer.finished.artifact`、`run.finished`、`run.error`；失败边界第一版只暴露 `run.error`。
 - 已补强：FastAPI `/chat`、`/batch`、`state/history` 路由测试；SQLite checkpoint 验证脚本 `part2-tax-agent/check_sqlite_checkpoint_persistence.py`。
 - 当前本机环境状态：`.venv` 已可运行 SQLite checkpoint 验证脚本；OpenGauss 仍待兼容性适配。
 - 可用默认路径：`CHECKPOINT_BACKEND=auto|sqlite|memory`、`LANGFUSE_ENABLED=0`，用于本地开发和单测；这不是 OpenGauss/Langfuse 最终 E2E 验收。
 - 已稳定：服务级 SQLite checkpoint DB 路径固定为 `output/checkpoints/service.sqlite`，避免服务重启后因随机 `tax-run-*` 文件名误判恢复失败。
+- 已验证：主项目测试面 `part2-tax-agent/tests` 通过；砚砚 review 后提交 `df0279f feat(protocol): add run.started and answer.finished.artifact`。
+- close 验证（2026-06-02）：`pytest part2-tax-agent/tests -q` -> `80 passed, 1 warning`；`check_sqlite_checkpoint_persistence.py --thread-id f004-close-verify` -> `SQLite checkpoint verification: ok`，`history_count: 3`。
 - 待环境就绪：OpenGauss 连接/setup/state history/replay 验证（注：`langgraph-checkpoint-postgres` 当前版本与 openGauss 6.0.5 SQL 方言不完全兼容，需等待 upstream 适配或自定义 adapter）；Langfuse 本地部署、callback metadata/tags、trace UI 可见性验证；完整 E2E 演示文档。
 
 ## 为什么
@@ -219,7 +224,20 @@ event: tool.finished
 data: {"name":"retrieve_tax_context","source_ids":["vat-regulation"]}
 
 event: answer.finished
-data: {"answer":"...","citations":[]}
+data: {
+  "thread_id": "tax-thread-001",
+  "answer": "...",
+  "citations": [],
+  "artifact": {
+    "kind": "TaxAnswer",
+    "data": {
+      "question": "...",
+      "intent": "definition",
+      "answer": "...",
+      "citations": []
+    }
+  }
+}
 
 event: run.finished
 data: {"thread_id":"tax-thread-001"}
@@ -229,9 +247,10 @@ SSE 映射要求：
 
 - 不直接泄露不稳定的内部 Python 对象结构。
 - 对外事件名稳定，内部 DeepAgents/LangGraph event schema 变化时只改 adapter。
-- 协议层不使用 `stage.*`。可观察动作统一投影为 `run.*`、`answer.*`、`tool.*`、`skill.*`、`batch.*`。
+- 协议层不使用 `stage.*`。第一版 `/chat/stream` 只投影 `run.*`、`answer.*`、`tool.*`；`skill.*` 暂不进入第一版，`batch.*` 不属于 `/chat/stream` 协议。
 - `answer.delta` 是可选内容流，只表示回答文本增量；进度状态不要塞进 `answer.delta`。
 - stream 结束必须发 `run.finished`；异常必须发 `run.error` 并结束连接。
+- 第一版只保证 `run.started` 在 `answer.started` 前，`answer.finished` 在 `run.finished` 前；其他 `tool.*` 事件按 Agent 实际发生顺序投影，不保证固定位置。
 
 已新增显式 `InteractionMode` / `ResponseStrategy` 参数，用于区分调用方期望的呈现方式：
 
@@ -331,20 +350,27 @@ batch
 
 ## 验收标准
 
-1. [ ] `/chat` 支持 `session_id`、`trace_id`、`thread_id`、`messages` 输入，并返回最终 answer/citations/checkpoint/observability。
-2. [ ] `/chat/stream` 能把内部事件转换为稳定 SSE：`run.started`、`answer.started`、`answer.delta`、`answer.finished`、`tool.started`、`tool.finished`、`run.finished`、`run.error`。
-3. [ ] 多 turn 调用能携带前序 `messages`，下一轮回答能使用当前对话上下文。
-4. [ ] 同一 `thread_id` 在 OpenGauss checkpoint 中可恢复最新 state。
-5. [ ] 服务重启后，用同一 `thread_id` 能继续对话，而不是重新开始。
-6. [ ] 可通过接口或脚本读取 `get_state` 和 `get_state_history` 结果。
-7. [ ] 可从历史 checkpoint replay，并记录 replay 触发点。
-8. [ ] `CHECKPOINT_BACKEND=opengauss` 连接失败时服务启动失败，不静默 fallback。
-9. [ ] Langfuse 本地部署说明可执行，健康检查能确认 UI/API 可达。
-10. [ ] 每次 `/chat` 和 `/chat/stream` 都在 Langfuse 中记录 trace，并包含 `session_id`、`trace_id`、`thread_id` metadata/tags。
-11. [ ] 本地 JSON trace 不再是默认主路径；只有 `LOCAL_AUDIT_TRACE_ENABLED=1` 时才写入。
-12. [ ] `/batch` 保留旧文档/问题列表处理能力，并由 CLI/API 路由显式选择，不包装成 DeepAgents skill。
-13. [ ] FastAPI 接口测试、checkpoint 持久化测试、Langfuse callback 配置测试、SSE 协议测试、batch 路由测试全部通过。
-14. [ ] 演示文档能指导铲屎官完成本地 OpenGauss + Langfuse + FastAPI E2E 验证。
+当前阶段已验收：
+
+1. [x] `/chat` 支持 `session_id`、`trace_id`、`thread_id`、`messages` 输入，并返回最终 answer/citations/checkpoint/observability。
+2. [x] `/chat/stream` 能把内部事件转换为稳定 SSE：`run.started`、`answer.started`、`answer.delta`、`answer.finished`、`tool.started`、`tool.finished`、`run.finished`、`run.error`。
+3. [x] 多 turn 调用能携带前序 `messages`；adapter 层会把完整 `messages` 传给 Agent，并用上下文做领域分析。
+4. [x] SQLite checkpoint 使用稳定服务级 DB 路径；关闭并重新打开 checkpointer 后可用同一 `thread_id` 读取 state/history。
+5. [x] 可通过接口或脚本读取 `get_state` 和 `get_state_history` 结果。
+6. [x] `CHECKPOINT_BACKEND=opengauss` 依赖缺失或不可用时失败，不静默 fallback。
+7. [x] Langfuse callback 配置、metadata/tags 注入路径和缺依赖错误处理已有单测覆盖；本地 UI 可见性属于外部环境验收。
+8. [x] 本地 JSON trace 不再是默认主路径；只有显式 fallback 开关时才写入。
+9. [x] `/batch` 保留旧文档/问题列表处理能力，并由 CLI/API 路由显式选择，不包装成 DeepAgents skill。
+10. [x] FastAPI 接口测试、checkpoint 持久化测试、Langfuse callback 配置测试、SSE 协议测试、batch 路由测试全部通过。
+
+后续外部环境 / 远期验收：
+
+1. [ ] 同一 `thread_id` 在 OpenGauss checkpoint 中可恢复最新 state。
+2. [ ] 服务重启后，用同一 `thread_id` 完成真实 FastAPI + 模型调用级继续对话，而不是重新开始。
+3. [ ] 可从历史 checkpoint replay，并记录 replay 触发点。
+4. [ ] Langfuse 本地部署说明可执行，健康检查能确认 UI/API 可达。
+5. [ ] 每次 `/chat` 和 `/chat/stream` 都能在 Langfuse UI 中看到 trace，并包含 `session_id`、`trace_id`、`thread_id` metadata/tags。
+6. [ ] 演示文档能指导铲屎官完成本地 OpenGauss + Langfuse + FastAPI E2E 验证。
 
 ## 依赖
 

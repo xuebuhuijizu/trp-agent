@@ -10,9 +10,15 @@ created: 2026-06-01
 
 ## 结论
 
-当前阶段可以收口。
+当前阶段已收口（2026-06-02）。
 
-本阶段已经证明：DeepAgents 税务 PoC 可以作为本地可运行的服务基线存在。`main`、`/chat`、`/chat/stream`、`/batch`、Langfuse 观测、SQLite checkpoint 跨重启恢复都已经跑通；OpenGauss 不再作为当前阶段阻塞项。
+本阶段已经证明：DeepAgents 税务 PoC 可以作为本地可运行的服务基线存在。`main`、`/chat`、`/chat/stream`、`/batch`、Langfuse adapter、SQLite checkpoint 跨重启恢复都已经跑通；OpenGauss 不再作为当前阶段阻塞项。
+
+最终收口提交：
+
+- `0e2cf19 feat: stable SQLite checkpoint baseline`
+- `23401b6 feat: InteractionMode / ResponseStrategy first edition`
+- `df0279f feat(protocol): add run.started and answer.finished.artifact`
 
 下一阶段建议从“能跑通”转向“对外协议稳定、入口语义清晰、边界可替换”。
 
@@ -28,6 +34,9 @@ created: 2026-06-01
 | SQLite checkpoint | 已跑通 | `service.sqlite` 基线提交 `0e2cf19`，测试 `75 passed`，人工验证服务重启后可恢复 |
 | 官方 examples 参考 | 已整理 | `docs/references/deepagents-official-examples-reference.md` |
 | 演进方向整理 | 已整理 | `docs/discussions/2026-06-01-deepagents-evolution-options.md` |
+| InteractionMode / ResponseStrategy | 已跑通 | 提交 `23401b6`，route 级 mode 校验与 `progress_stream` 过滤已通过测试 |
+| `/chat/stream` 第一版稳定协议 | 已跑通 | 提交 `df0279f`，`run.started`、`answer.finished.artifact`、`run.error` 边界已通过 `80 passed` |
+| Close 验证 | 已跑通 | 2026-06-02：`pytest part2-tax-agent/tests -q` -> `80 passed, 1 warning`；SQLite close/reopen 脚本 -> `history_count: 3` |
 
 ## SQLite 与 OpenGauss 取舍
 
@@ -69,7 +78,7 @@ OpenGauss = 远期 project adapter，可保留方向，但不阻塞当前演进
 - `packages/`
 - `chat-stream.json`
 
-这些不影响当前代码状态，但正式交付前需要决定：
+这些不影响当前代码状态。铲屎官已明确本次 close 不处理这些未跟踪项；后续正式迁移交付前再决定：
 
 - 归档为迁移证据；
 - 加入忽略规则；
@@ -84,7 +93,7 @@ OpenGauss = 远期 project adapter，可保留方向，但不阻塞当前演进
 - 第二次同 `thread_id` 请求；
 - `/threads/{thread_id}/history` 查询结果。
 
-该项不是当前阶段阻塞项。
+该项不是当前阶段阻塞项。铲屎官已授权实施验证步骤；当前可补充本地 SQLite checkpoint close/reopen 脚本证据，但真实 OpenGauss + Langfuse + FastAPI E2E 仍属于后续外部环境验收。
 
 ## 下一阶段候选方向
 
