@@ -135,14 +135,14 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
             }
             yield {
                 "event": "on_tool_start",
-                "name": "retrieve_tax_context",
+                "name": "find_tax_authorities",
                 "data": {"input": {"query": "vat"}},
             }
             yield {
                 "event": "on_tool_end",
-                "name": "retrieve_tax_context",
+                "name": "find_tax_authorities",
                 "data": {
-                    "output": '{"sources":[{"source_id":"vat-regulation","title":"VAT"}]}'
+                    "output": '{"citations":[{"citation_id":"local_tax_authorities:vat-regulation","source_id":"vat-regulation","source_type":"tax_authority","provider_id":"local_tax_authorities","title":"VAT","locator":null,"snippet":"VAT","confidence":0.9,"retrieved_at":null,"metadata":{}}]}'
                 },
             }
 
@@ -175,20 +175,47 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
         {"event": "answer.delta", "data": {"text": "world"}},
         {
             "event": "tool.started",
-            "data": {"name": "retrieve_tax_context", "input": {"query": "vat"}},
+            "data": {"name": "find_tax_authorities", "input": {"query": "vat"}},
         },
         {
             "event": "tool.finished",
             "data": {
-                "name": "retrieve_tax_context",
+                "name": "find_tax_authorities",
                 "source_ids": ["vat-regulation"],
+                "citations": [
+                    {
+                        "citation_id": "local_tax_authorities:vat-regulation",
+                        "source_id": "vat-regulation",
+                        "source_type": "tax_authority",
+                        "provider_id": "local_tax_authorities",
+                        "title": "VAT",
+                        "locator": None,
+                        "snippet": "VAT",
+                        "confidence": 0.9,
+                        "retrieved_at": None,
+                        "metadata": {},
+                    }
+                ],
             },
         },
         {
             "event": "answer.finished",
             "data": {
                 "answer": "hello world",
-                "citations": [{"source_id": "vat-regulation", "title": "VAT"}],
+                    "citations": [
+                        {
+                            "citation_id": "local_tax_authorities:vat-regulation",
+                            "source_id": "vat-regulation",
+                            "source_type": "tax_authority",
+                            "provider_id": "local_tax_authorities",
+                            "title": "VAT",
+                            "locator": None,
+                            "snippet": "VAT",
+                            "confidence": 0.9,
+                            "retrieved_at": None,
+                            "metadata": {},
+                        }
+                    ],
                 "thread_id": "thread-stream",
                 "artifact": {
                     "kind": "TaxAnswer",
@@ -196,7 +223,20 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
                         "question": "stream this answer",
                         "intent": "definition",
                         "answer": "hello world",
-                        "citations": [{"source_id": "vat-regulation", "title": "VAT"}],
+                            "citations": [
+                                {
+                                    "citation_id": "local_tax_authorities:vat-regulation",
+                                    "source_id": "vat-regulation",
+                                    "source_type": "tax_authority",
+                                    "provider_id": "local_tax_authorities",
+                                    "title": "VAT",
+                                    "locator": None,
+                                    "snippet": "VAT",
+                                    "confidence": 0.9,
+                                    "retrieved_at": None,
+                                    "metadata": {},
+                                }
+                            ],
                     },
                 },
             },

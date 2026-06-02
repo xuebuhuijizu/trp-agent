@@ -1,4 +1,4 @@
-"""DeepAgents execution boundary for the current tax-agent runtime.
+﻿"""DeepAgents execution boundary for the current tax-agent runtime.
 
 Main path:
     - execute_turn(...) for /chat and batch-adapted turns
@@ -19,7 +19,8 @@ from pydantic import BaseModel, Field
 from tax_agent.config import AgentConfig
 from tax_agent.domain.domain_knowledge import analyze_tax_context, analyze_tax_question
 from tax_agent.domain.intent_classifier import ClassifiedQuestion, IntentClassifier
-from tax_agent.domain.tax_retrieval import extract_citations_from_messages, retrieve_tax_context
+from tax_agent.domain.reference_layer import find_tax_authorities
+from tax_agent.domain.tax_retrieval import extract_citations_from_messages
 from tax_agent.runtime.checkpointing import (
     CheckpointConfig,
     build_async_checkpoint_config,
@@ -46,14 +47,22 @@ TAX_SYSTEM_PROMPT = """你是一位专业的税务顾问专家。
 - 如引用法规或数据，标注来源
 - 如不确定，明确说明局限性
 - 对复杂问题先使用 DeepAgents 原生规划能力（write_todos）拆解任务
-- 需要法规依据时调用 retrieve_tax_context 工具，并在回答中引用检索到的 source_id/title
+- 需要法规依据时调用 find_tax_authorities 工具，并在回答中引用检索到的 source_id/title
 - 不输出模型内部推理标签，例如 <think>...</think>
 """
 
 
 class TaxCitation(BaseModel):
+    citation_id: str | None = Field(default=None, description="引用 ID")
     source_id: str = Field(description="检索来源 ID")
+    source_type: str | None = Field(default=None, description="引用来源类型")
+    provider_id: str | None = Field(default=None, description="ReferenceProvider ID")
     title: str = Field(description="检索来源标题")
+    locator: str | None = Field(default=None, description="来源内定位信息")
+    snippet: str | None = Field(default=None, description="引用片段")
+    confidence: float | None = Field(default=None, description="检索或匹配置信度")
+    retrieved_at: str | None = Field(default=None, description="检索时间")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="来源特有扩展字段")
 
 
 class TaxAnswer(BaseModel):
@@ -162,7 +171,7 @@ class AgentExecutor:
         return create_deep_agent(
             model=model,
             system_prompt=TAX_SYSTEM_PROMPT,
-            tools=[retrieve_tax_context, analyze_tax_question],
+            tools=[find_tax_authorities, analyze_tax_question],
             skills=SKILL_SOURCES,
             memory=MEMORY_SOURCES,
             backend=FilesystemBackend(root_dir=PART2_ROOT, virtual_mode=True),
@@ -271,7 +280,6 @@ class AgentExecutor:
             if normalized["event"] == "tool.finished":
                 saw_tool_event = True
                 citations.extend(normalized["data"].get("citations", []))
-                normalized["data"].pop("citations", None)
             if normalized["event"] == "tool.started":
                 saw_tool_event = True
             yield normalized
@@ -358,7 +366,6 @@ class AgentExecutor:
         """Legacy static-plan prompt used only by execute(..., plan_steps=...)."""
         plan_text = "\n".join(f"{i+1}. {step}" for i, step in enumerate(plan_steps))
         return f"""请回答以下税务问题。
-
 问题：{question.text}
 
 意图类别：{question.intent}
@@ -371,14 +378,13 @@ class AgentExecutor:
     @staticmethod
     def _build_native_prompt(question: ClassifiedQuestion) -> str:
         return f"""请回答以下税务问题。
-
 问题：{question.text}
 
 业务标签：{question.intent}
 
 请使用 DeepAgents 原生工作方式完成任务：
 1. 对需要多步判断的问题，使用 write_todos 拆解并跟踪任务。
-2. 需要法规依据、政策来源或税务定义时，调用 retrieve_tax_context。
+2. 需要法规依据、政策来源或税务定义时，调用 find_tax_authorities。
 3. 回答必须结构化，并引用检索工具返回的 source_id/title。
 4. 对税审问题使用 analyze_tax_question 获取术语、场景、历史问题和质询意图分析。
 5. 不要输出 <think>...</think> 或其他内部推理标签。"""
@@ -486,3 +492,4 @@ class AgentExecutor:
         if isinstance(value, dict):
             return value
         return {"repr": repr(value)}
+

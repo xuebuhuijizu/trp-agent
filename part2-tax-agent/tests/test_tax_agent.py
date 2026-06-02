@@ -247,7 +247,7 @@ class TestAgentExecutor:
         assert "税务顾问专家" in deepagents_calls[0]["system_prompt"]
         assert "tools" in deepagents_calls[0]
         assert {tool.__name__ for tool in deepagents_calls[0]["tools"]} == {
-            "retrieve_tax_context",
+            "find_tax_authorities",
             "analyze_tax_question",
         }
         assert deepagents_calls[0]["skills"] == ["/skills"]
@@ -290,8 +290,8 @@ class TestAgentExecutor:
                 return {
                     "messages": [
                         {
-                            "name": "retrieve_tax_context",
-                            "content": '{"sources": [{"source_id": "vat-regulation", "title": "增值税暂行条例"}]}',
+                            "name": "find_tax_authorities",
+                            "content": '{"citations": [{"citation_id": "local_tax_authorities:vat-regulation", "source_id": "vat-regulation", "source_type": "tax_authority", "provider_id": "local_tax_authorities", "title": "增值税暂行条例", "locator": null, "snippet": "VAT", "confidence": 0.9, "retrieved_at": null, "metadata": {}}]}',
                         },
                         {"content": "final answer"},
                     ]
@@ -305,10 +305,24 @@ class TestAgentExecutor:
         result = asyncio.run(executor.execute_with_evidence(question))
 
         assert result.answer == "final answer"
-        assert result.citations == [{"source_id": "vat-regulation", "title": "增值税暂行条例"}]
-        assert result.tool_events[0]["name"] == "retrieve_tax_context"
+        assert result.citations == [
+            {
+                "citation_id": "local_tax_authorities:vat-regulation",
+                "source_id": "vat-regulation",
+                "source_type": "tax_authority",
+                "provider_id": "local_tax_authorities",
+                "title": "增值税暂行条例",
+                "locator": None,
+                "snippet": "VAT",
+                "confidence": 0.9,
+                "retrieved_at": None,
+                "metadata": {},
+            }
+        ]
+        assert result.tool_events[0]["name"] == "find_tax_authorities"
         prompt = fake_agent.payload["messages"][0]["content"]
         assert "write_todos" in prompt
+        assert "find_tax_authorities" in prompt
         assert "执行计划：" not in prompt
 
     def test_execute_with_evidence_prefers_structured_response(self):

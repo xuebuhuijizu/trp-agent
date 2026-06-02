@@ -1,6 +1,6 @@
 """Legacy RAG decorator.
 
-F004/F002 main paths use the `retrieve_tax_context` tool. This no-op adapter is
+F005+ main paths use the Reference Layer `find_tax_authorities` tool. This no-op adapter is
 kept for compatibility tests and historical examples, not for the main path.
 """
 

@@ -8,7 +8,7 @@ created: 2026-06-02
 
 # F005: Reference Layer 外部引用框架
 
-> Status: spec | Owner: 宪宪
+> Status: review | Owner: 宪宪
 
 ## Why
 
@@ -78,14 +78,14 @@ metadata
 
 ## Acceptance Criteria
 
-- [ ] AC-1: 存在 Reference Layer 的核心 schema：`ReferenceProvider`、`ReferenceManager`、`ReferenceBundle`、`Citation`。
-- [ ] AC-2: `find_tax_authorities` 作为第一版 Agent tool，替代 `retrieve_tax_context` 的长期语义位置。
-- [ ] AC-3: 当前本地税务 seed data 通过 `LocalTaxAuthorityProvider` 接入，不再由 tool 直接理解数据结构。
-- [ ] AC-4: `ReferenceManager` 负责 provider 调度、去重、排序和标准化。
-- [ ] AC-5: `Citation` 至少包含本 spec 定义的稳定字段，并能进入最终 answer/artifact/audit trace。
-- [ ] AC-6: streaming 的 tool event 能输出标准 citation/source 信息，不依赖旧 tool 私有 payload。
-- [ ] AC-7: `lookup_tax_terms`、`match_tax_cases`、`match_audit_scenarios`、`inspect_uploaded_reference` 只在设计文档中定义边界，不在第一版实现。
-- [ ] AC-8: 现有 F002/F003/F004 行为保持可验证，不因 tool rename 破坏结构化回答、citation、audit trace、streaming 协议。
+- [x] AC-1: 存在 Reference Layer 的核心 schema：`ReferenceProvider`、`ReferenceManager`、`ReferenceBundle`、`Citation`。
+- [x] AC-2: `find_tax_authorities` 作为第一版 Agent tool，替代 `retrieve_tax_context` 的长期语义位置。
+- [x] AC-3: 当前本地税务 seed data 通过 `LocalTaxAuthorityProvider` 接入，不再由 tool 直接理解数据结构。
+- [x] AC-4: `ReferenceManager` 负责 provider 调度、去重、排序和标准化。
+- [x] AC-5: `Citation` 至少包含本 spec 定义的稳定字段，并能进入最终 answer/artifact/audit trace。
+- [x] AC-6: streaming 的 tool event 能输出标准 citation/source 信息，不依赖旧 tool 私有 payload。
+- [x] AC-7: `lookup_tax_terms`、`match_tax_cases`、`match_audit_scenarios`、`inspect_uploaded_reference` 只在设计文档中定义边界，不在第一版实现。
+- [x] AC-8: 现有 F002/F003/F004 行为保持可验证，不因 tool rename 破坏结构化回答、citation、audit trace、streaming 协议。
 
 ## Dependencies
 
@@ -104,7 +104,11 @@ metadata
 
 - `confidence` 是 provider 直接给出，还是由 `ReferenceManager` 统一归一化？
 - `Citation.locator` 是否需要第一版拆成结构化字段，例如 `article`、`paragraph`、`page`、`path`？
-- 旧 `retrieve_tax_context` 是否保留兼容 shim，还是直接迁移测试和调用方？
+
+## Implementation Notes
+
+- 旧 `retrieve_tax_context` 保留为兼容 wrapper，但主路径注册给 DeepAgents 的 tool 是 `find_tax_authorities`。
+- `extract_citations_from_messages` 支持标准 `citations` payload，也兼容历史 `sources` payload，避免旧消息丢失 citation。
 
 ## Links
 
