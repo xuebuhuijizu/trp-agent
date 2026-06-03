@@ -1,16 +1,7 @@
 import json
 from typing import Any
 
-from tax_agent.business.references._legacy_reference_layer import (
-    DEFAULT_REFERENCE_MANAGER,
-    TAX_AUTHORITY_SOURCES,
-    Citation,
-    LocalTaxAuthorityProvider,
-    ReferenceBundle,
-    ReferenceItem,
-    ReferenceManager,
-    ReferenceProvider,
-)
+from tax_agent.business.references.manager import DEFAULT_REFERENCE_MANAGER
 
 
 def find_tax_authorities(query: str) -> str:
@@ -67,14 +58,6 @@ def _message_value(message: Any, key: str):
 
 
 __all__ = [
-    "Citation",
-    "DEFAULT_REFERENCE_MANAGER",
-    "LocalTaxAuthorityProvider",
-    "ReferenceBundle",
-    "ReferenceItem",
-    "ReferenceManager",
-    "ReferenceProvider",
-    "TAX_AUTHORITY_SOURCES",
     "extract_citations_from_messages",
     "find_tax_authorities",
     "retrieve_tax_context",
