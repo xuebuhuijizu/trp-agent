@@ -28,7 +28,7 @@ part2-tax-agent/
 │   ├── agent/                   # Agent Harness：instructions、tool exposure、context policy
 │   ├── business/                # answers、Reference Layer、确定性分析
 │   ├── delivery/                # FastAPI routes、batch、batch_io
-│   └── domain/ service/ io/     # 兼容 wrapper，不是新主路径
+│       └── (旧 domain/ service/ io/ 已移除，能力迁至 business/ 和 delivery/)
 ├── skills/                      # DeepAgents skills
 ├── memories/                    # DeepAgents memory source
 └── tests/                       # 主项目测试

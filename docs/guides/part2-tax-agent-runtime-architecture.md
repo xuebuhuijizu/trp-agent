@@ -78,7 +78,7 @@ flowchart TD
     ChatRoute --> Turn[ConversationRequest messages + session_id + trace_id + thread_id]
     StreamRoute --> Turn
 
-    BatchRoute --> Extract[delivery/batch_io/question_extractor]
+    BatchRoute --> Extract[delivery/batch_delivery/batch_io/question_extractor]
     Extract --> Classify[business/analysis/IntentClassifier]
     Classify --> PerQuestion[per-question ConversationRequest]
     PerQuestion --> Turn

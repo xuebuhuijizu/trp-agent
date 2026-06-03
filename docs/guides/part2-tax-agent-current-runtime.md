@@ -28,7 +28,7 @@ updated: 2026-06-03
 ```text
 main.py
   -> delivery/batch.BatchProcessor.run(...)
-  -> delivery/batch_io/question_extractor.extract_questions(...)
+  -> delivery/batch_delivery/batch_io/question_extractor.extract_questions(...)
   -> business/analysis/IntentClassifier.classify_batch(...)
   -> runtime/executor.AgentExecutor.execute_turn(...)
   -> delivery/batch_io/OutputFormatter.write_all(...)
