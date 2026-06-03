@@ -8,9 +8,9 @@ from types import SimpleNamespace
 import pytest
 
 from tax_agent.config import AgentConfig
-from tax_agent.domain.intent_classifier import ClassifiedQuestion, IntentClassifier
-from tax_agent.io.output_formatter import OutputFormatter
-from tax_agent.io.question_extractor import _split_questions, extract_questions
+from tax_agent.business.analysis.intent_classifier import ClassifiedQuestion, IntentClassifier
+from tax_agent.delivery.batch_io.output_formatter import OutputFormatter
+from tax_agent.delivery.batch_io.question_extractor import _split_questions, extract_questions
 from tax_agent.legacy.planner import DefaultPlanner, Planner
 from tax_agent.legacy.rag_decorator import NoopRAG, RAGDecorator
 

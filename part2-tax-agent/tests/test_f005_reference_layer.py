@@ -1,12 +1,12 @@
 import json
 
-from tax_agent.domain.reference_layer import (
+from tax_agent.business.references._legacy_reference_layer import (
     Citation,
     LocalTaxAuthorityProvider,
     ReferenceManager,
     find_tax_authorities,
 )
-from tax_agent.domain.tax_retrieval import extract_citations_from_messages
+from tax_agent.business.references.tools import extract_citations_from_messages
 
 
 def test_local_tax_authority_provider_returns_standard_reference_bundle():

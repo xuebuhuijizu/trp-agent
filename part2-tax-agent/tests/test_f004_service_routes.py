@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from tax_agent.service.service_app import create_app
+from tax_agent.delivery.http_api import create_app
 
 
 def _chat_payload() -> dict:

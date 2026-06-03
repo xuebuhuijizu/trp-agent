@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from tax_agent.config import AgentConfig
-from tax_agent.domain.domain_knowledge import analyze_tax_context
+from tax_agent.business.analysis.tax_context import analyze_tax_context
 from tax_agent.runtime.agent_executor import AgentExecutor
 from tax_agent.runtime.checkpointing import build_async_checkpoint_config, build_checkpoint_config
 from tax_agent.runtime.conversation import ConversationMessage, ConversationRequest
@@ -143,13 +143,13 @@ def test_sse_event_renderer_outputs_stable_protocol():
 
 
 def test_service_default_port_is_3004():
-    from tax_agent.service.service_app import DEFAULT_API_PORT
+    from tax_agent.delivery.http_api import DEFAULT_API_PORT
 
     assert DEFAULT_API_PORT == 3004
 
 
 def test_service_app_reports_missing_fastapi_dependency(monkeypatch):
-    from tax_agent.service.service_app import create_app
+    from tax_agent.delivery.http_api import create_app
 
     monkeypatch.setitem(sys.modules, "fastapi", None)
     with pytest.raises(RuntimeError, match="fastapi and uvicorn"):
@@ -216,7 +216,7 @@ def test_runtime_entrypoints_load_dotenv_with_utf8_sig():
 
 
 def test_batch_processor_uses_explicit_batch_route(tmp_path):
-    from tax_agent.service.batch_runtime import BatchProcessor, BatchRequest
+    from tax_agent.delivery.batch import BatchProcessor, BatchRequest
 
     input_file = tmp_path / "questions.txt"
     input_file.write_text("什么是增值税？\n那进项税额呢？", encoding="utf-8")

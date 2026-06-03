@@ -19,7 +19,7 @@ def _chat_payload() -> dict:
 def test_chat_stream_uses_executor_stream_turn_instead_of_execute_turn():
     from fastapi.testclient import TestClient
 
-    from tax_agent.service.service_app import create_app
+    from tax_agent.delivery.http_api import create_app
 
     class FakeExecutor:
         async def execute_turn(self, request):
@@ -60,7 +60,7 @@ def test_chat_stream_uses_executor_stream_turn_instead_of_execute_turn():
 def test_chat_stream_ignores_removed_progress_mode_field():
     from fastapi.testclient import TestClient
 
-    from tax_agent.service.service_app import create_app
+    from tax_agent.delivery.http_api import create_app
 
     class FakeExecutor:
         async def stream_turn(self, request):
@@ -96,7 +96,7 @@ def test_chat_stream_ignores_removed_progress_mode_field():
 def test_chat_stream_ignores_removed_structured_final_mode_field():
     from fastapi.testclient import TestClient
 
-    from tax_agent.service.service_app import create_app
+    from tax_agent.delivery.http_api import create_app
 
     class FakeExecutor:
         async def stream_turn(self, request):

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from tax_agent.domain.domain_knowledge import (
+from tax_agent.business.analysis.tax_context import (
     analyze_tax_question,
     load_audit_scenarios,
     load_historical_questions,
