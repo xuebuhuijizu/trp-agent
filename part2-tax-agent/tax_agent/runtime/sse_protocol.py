@@ -1,9 +1,5 @@
-import json
-from collections.abc import Mapping
-from typing import Any
+"""Compatibility import for the pre-migration SSE module path."""
 
+from tax_agent.runtime.sse import render_sse
 
-def render_sse(event: str, data: Mapping[str, Any]) -> str:
-    payload = json.dumps(dict(data), ensure_ascii=False, separators=(",", ":"))
-    return f"event: {event}\ndata: {payload}\n\n"
-
+__all__ = ["render_sse"]

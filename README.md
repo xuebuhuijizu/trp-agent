@@ -11,7 +11,7 @@ created: 2026-06-03
 
 ## 当前状态
 
-- Runtime：F004 已完成 conversation runtime、checkpoint、observability、streaming 协议和 `InteractionMode`。
+- Runtime：F004 已完成 conversation runtime、checkpoint、observability 和 AG-UI streaming 协议；旧 `InteractionMode` 不再作为架构级概念保留。
 - Reference Layer：F005 已完成第一版 `ReferenceProvider` / `ReferenceManager` / `ReferenceBundle` / `Citation`。
 - 主 Agent tool：`find_tax_authorities`。
 - 旧 tool：`retrieve_tax_context` 仅保留为兼容 wrapper，不是新主路径。
@@ -25,10 +25,10 @@ part2-tax-agent/
 ├── check_*.py                   # 本地运维/兼容性验证脚本
 ├── tax_agent/
 │   ├── runtime/                 # AgentExecutor、checkpoint、streaming、SSE
-│   ├── domain/                  # Reference Layer、领域分析、意图分类
-│   ├── service/                 # FastAPI routes 和 batch runtime
-│   ├── io/                      # 文件输入、Markdown/JSON 输出
-│   └── legacy/                  # 历史实验代码，不是主路径
+│   ├── agent/                   # Agent Harness：instructions、tool exposure、context policy
+│   ├── business/                # answers、Reference Layer、确定性分析
+│   ├── delivery/                # FastAPI routes、batch、batch_io
+│   └── domain/ service/ io/     # 兼容 wrapper，不是新主路径
 ├── skills/                      # DeepAgents skills
 ├── memories/                    # DeepAgents memory source
 └── tests/                       # 主项目测试
@@ -37,9 +37,10 @@ part2-tax-agent/
 新人优先读：
 
 1. `docs/guides/part2-tax-agent-current-runtime.md`
-2. `part2-tax-agent/tax_agent/runtime/agent_executor.py`
-3. `part2-tax-agent/tax_agent/domain/reference_layer.py`
-4. `part2-tax-agent/tax_agent/service/service_app.py`
+2. `part2-tax-agent/tax_agent/agent/graph.py`
+3. `part2-tax-agent/tax_agent/runtime/executor.py`
+4. `part2-tax-agent/tax_agent/business/references/tools.py`
+5. `part2-tax-agent/tax_agent/delivery/http_api.py`
 
 ## 环境准备
 
@@ -82,7 +83,7 @@ OPENAI_API_KEY=...
 python -m pytest part2-tax-agent\tests -q --basetemp=.codex-tmp\pytest-basetemp -o cache_dir=.codex-tmp\pytest-cache
 ```
 
-当前基线：`84 passed`。
+当前基线：`87 passed`。
 
 不要直接收集 `packages/`，它是历史迁移快照，不是主项目。
 

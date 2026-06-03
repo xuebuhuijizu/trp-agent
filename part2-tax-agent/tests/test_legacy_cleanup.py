@@ -11,12 +11,12 @@ def test_main_no_longer_uses_static_planner():
 def test_checkpointing_is_not_mixed_into_local_audit_trace():
     root = Path(__file__).resolve().parents[1]
     audit_trace = (root / "tax_agent" / "runtime" / "audit_trace.py").read_text(encoding="utf-8")
-    agent_executor = (root / "tax_agent" / "runtime" / "agent_executor.py").read_text(encoding="utf-8")
+    executor = (root / "tax_agent" / "runtime" / "executor.py").read_text(encoding="utf-8")
 
     assert "class CheckpointConfig" not in audit_trace
     assert "def build_checkpoint_config" not in audit_trace
     assert "def build_async_checkpoint_config" not in audit_trace
-    assert "from tax_agent.runtime.checkpointing import" in agent_executor
+    assert "from tax_agent.runtime.checkpointing import" in executor
 
 
 def test_current_runtime_guide_names_main_paths_and_file_roles():
@@ -31,5 +31,6 @@ def test_current_runtime_guide_names_main_paths_and_file_roles():
     assert "HTTP 单轮 / 多轮对话" in guide
     assert "HTTP SSE 流式对话" in guide
     assert "`tax_agent/runtime/checkpointing.py`" in guide
-    assert "`tax_agent/runtime/audit_trace.py`" in guide
-    assert "`tax_agent/legacy/*`" in guide
+    assert "`tax_agent/agent/graph.py`" in guide
+    assert "`tax_agent/business/references/`" in guide
+    assert "旧 `InteractionMode` / `response_strategy.py` 属于清理清单" in guide

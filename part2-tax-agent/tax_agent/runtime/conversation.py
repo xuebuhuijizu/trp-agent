@@ -4,13 +4,6 @@ from pydantic import BaseModel, Field
 
 
 MessageRole = Literal["system", "user", "assistant", "tool"]
-InteractionMode = Literal[
-    "direct_text",
-    "progress_stream",
-    "answer_stream",
-    "structured_final",
-    "batch",
-]
 
 
 class ConversationMessage(BaseModel):
@@ -30,7 +23,6 @@ class ConversationRequest(BaseModel):
     trace_id: str = Field(min_length=1)
     thread_id: str = Field(min_length=1)
     messages: list[ConversationMessage] = Field(min_length=1)
-    interaction_mode: InteractionMode | None = None
 
     def to_agent_messages(self) -> list[dict]:
         return [message.to_agent_message() for message in self.messages]

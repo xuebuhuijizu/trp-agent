@@ -1,130 +1,133 @@
 ---
 feature_ids:
   - F004
+  - F005
+  - F006
 topics:
   - part2-tax-agent
   - runtime
   - architecture
 doc_kind: guide
 created: 2026-05-30
+updated: 2026-06-03
 ---
 
 # Part 2 税务 Agent 当前运行时
 
 这份文档只回答一个问题：**现在主流程到底经过哪些文件，哪些文件不是主流程。**
 
+目标架构和设计准则见：
+
+- [项目 4A 架构文档](../architecture/4a-architecture.md)
+- [Agent Harness 设计准则](agent-harness-design-principles.md)
+
 ## 当前有效入口
 
 ### 1. CLI 批处理
 
-用途：从 `sample_input.txt` 或指定文件读取多个问题，生成 Markdown / JSON 报告。
-
 ```text
 main.py
-  -> AgentExecutor.create(...)
-  -> BatchProcessor.run(...)
-  -> question_extractor.extract_questions(...)
-  -> IntentClassifier.classify_batch(...)
-  -> AgentExecutor.execute_turn(...)
-  -> OutputFormatter.write_all(...)
+  -> delivery/batch.BatchProcessor.run(...)
+  -> delivery/batch_io/question_extractor.extract_questions(...)
+  -> business/analysis/IntentClassifier.classify_batch(...)
+  -> runtime/executor.AgentExecutor.execute_turn(...)
+  -> delivery/batch_io/OutputFormatter.write_all(...)
 ```
 
 关键点：
 
-- CLI batch 是兼容入口，不是对话主入口。
+- CLI batch 是交付形态，不是 Agent Harness 本体。
 - 每个问题会转成一个 `ConversationRequest`。
-- batch 路由显式存在，避免把旧的一问一答流程伪装成 DeepAgents skill。
+- batch 文件输入输出只在 `delivery/batch_io/`，不进入核心 Agent 装配。
 
 ### 2. HTTP 单轮 / 多轮对话
 
-用途：应用系统调用 Agent，传入 `session_id` / `trace_id` / `thread_id` 和消息历史。
-
 ```text
 app.py
-  -> service_app.create_app(...)
+  -> delivery/http_api.create_app(...)
   -> POST /chat
-  -> AgentExecutor.execute_turn(...)
+  -> runtime/executor.AgentExecutor.execute_turn(...)
   -> DeepAgents ainvoke(...)
 ```
 
 关键点：
 
 - `messages` 保存当前对话上下文。
-- `thread_id` 交给 checkpoint，用于同一条对话的状态恢复。
-- 跨对话偏好不塞进 `messages`，应进入 memory。
+- `thread_id` 交给 LangGraph checkpoint，用于同一条对话的状态恢复。
+- `/chat` 返回同步 JSON，业务产物与 AG-UI `RUN_FINISHED.result` 对齐。
 
 ### 3. HTTP SSE 流式对话
 
-用途：把 DeepAgents 内部事件转换为 AG-UI SSE 协议。
-
 ```text
 app.py
-  -> service_app.create_app(...)
+  -> delivery/http_api.create_app(...)
   -> POST /chat/stream
-  -> AgentExecutor.stream_turn(...)
-  -> ag_ui_protocol.normalize_ag_ui_event(...)
-  -> sse_protocol.render_sse(...)
+  -> runtime/executor.AgentExecutor.stream_turn(...)
+  -> runtime/ag_ui.normalize_ag_ui_event(...)
+  -> runtime/sse.render_sse(...)
 ```
 
 关键点：
 
 - `/chat/stream` 不调用 `execute_turn`。
-- `ag_ui_protocol.py` 是 DeepAgents 原始事件到 AG-UI 事件的适配层。
-- `sse_protocol.py` 只负责序列化 SSE 文本。
+- `/chat/stream` 对外只输出 AG-UI SSE，不再维护项目私有 streaming event。
+- `runtime/ag_ui.py` 负责从 DeepAgents / LangGraph raw events 投影到 AG-UI。
 
 ## 文件角色表
 
 | 文件 | 角色 | 是否主路径 | 为什么存在 |
 |---|---|---:|---|
-| `main.py` | CLI batch 入口 | 是 | 本地演示和离线批量问答入口 |
-| `app.py` | ASGI 入口 | 是 | 让 `uvicorn app:app --port 3004` 可直接启动 |
-| `tax_agent/service/service_app.py` | FastAPI 路由 | 是 | 暴露 `/chat`、`/chat/stream`、`/batch`、state/history |
-| `tax_agent/service/batch_runtime.py` | batch 适配层 | 是 | 把旧批处理流程显式隔离在 `/batch` / CLI |
-| `tax_agent/runtime/agent_executor.py` | DeepAgents 执行器 | 是 | 当前唯一的 Agent 调用封装 |
-| `tax_agent/runtime/conversation.py` | 请求/响应 schema | 是 | 统一 CLI、HTTP、SSE 的对话数据结构 |
-| `tax_agent/runtime/checkpointing.py` | checkpoint 工厂 | 是 | SQLite 优先，memory fallback，OpenGauss 兼容路径保留 |
-| `tax_agent/runtime/ag_ui_protocol.py` | AG-UI 协议适配 | 是 | 把框架事件归一化为 AG-UI 事件，管理 `runId` / `messageId` / `toolCallId` |
-| `tax_agent/runtime/sse_protocol.py` | SSE 文本协议 | 是 | 保持服务输出协议独立、可测试 |
+| `main.py` | CLI thin entrypoint | 是 | 本地演示和离线批量问答入口 |
+| `app.py` | ASGI thin entrypoint | 是 | 让 `uvicorn app:app --port 3004` 可直接启动 |
+| `tax_agent/agent/graph.py` | Agent Harness 装配 | 是 | 调用 `create_deep_agent(...)` |
+| `tax_agent/agent/instructions.py` | 模型行为约束 | 是 | system prompt / behavior constraints |
+| `tax_agent/agent/tool_manifest.py` | tool exposure | 是 | 控制暴露给模型的 tool 清单 |
+| `tax_agent/agent/context_policy.py` | context policy | 是 | skills / memory / filesystem 暴露策略 |
+| `tax_agent/business/answers/models.py` | 业务输出契约 | 是 | `TaxAnswer` / `TaxCitation` / artifact contract |
+| `tax_agent/business/references/*` | Reference Layer | 是 | 引用来源、provider、manager、tool adapter |
+| `tax_agent/business/analysis/*` | 确定性分析 | 是 | 意图分类、税务上下文分析 |
+| `tax_agent/runtime/executor.py` | Runtime executor | 是 | `execute_turn` / `stream_turn` 主编排 |
+| `tax_agent/runtime/conversation.py` | 请求/响应 schema | 是 | 统一 HTTP、SSE、batch 的对话数据结构 |
+| `tax_agent/runtime/checkpointing.py` | checkpoint 工厂 | 是 | SQLite / memory / OpenGauss 配置 |
+| `tax_agent/runtime/ag_ui.py` | AG-UI 协议适配 | 是 | 管理 `runId` / `messageId` / `toolCallId` |
+| `tax_agent/runtime/sse.py` | SSE 文本协议 | 是 | 保持 SSE 渲染独立、可测试 |
 | `tax_agent/runtime/observability.py` | Langfuse 适配 | 可选 | Langfuse 未启用时 provider 为 `none` |
-| `tax_agent/domain/*` | 税务领域匹配和检索 | 是 | 为 tool、batch 分类和上下文分析提供确定性支持 |
-| `tax_agent/io/*` | 文件输入和报告输出 | batch 主路径 | 只服务 CLI / `/batch` |
-| `tax_agent/runtime/audit_trace.py` | 旧本地 trace recorder | 兼容 | F003 产物，Langfuse 替换前保留，不参与当前主调用 |
-| `tax_agent/legacy/*` | 历史实验代码 | 否 | 只保留对比和兼容测试，不应被新主流程引用 |
-| `check_langfuse_observability.py` | 运维验证脚本 | 否 | 验证本地 Langfuse health、auth 和 callback adapter |
-| `check_sqlite_checkpoint_persistence.py` | 运维验证脚本 | 否 | 验证 SQLite checkpoint 跨进程恢复 |
-| `check_opengauss_compat.py` | 运维验证脚本 | 否 | 记录 OpenGauss 与 LangGraph checkpoint 兼容性 |
+| `tax_agent/delivery/http_api.py` | FastAPI routes | 是 | 暴露 `/chat`、`/chat/stream`、`/batch`、state/history |
+| `tax_agent/delivery/batch.py` | batch 编排 | 是 | 文件批处理 route / CLI 共用 |
+| `tax_agent/delivery/batch_io/*` | batch 输入输出 | batch 主路径 | txt/docx 解析、Markdown/JSON 报告 |
+| `tax_agent/domain/*` / `service/*` / `io/*` | 兼容 wrapper | 否 | 旧 import 迁移期兼容 |
+| `tax_agent/legacy/*` | 历史实验代码 | 否 | 只保留兼容测试和对照材料 |
 
 ## 当前代码阅读顺序
 
 如果只想理解主流程，按这个顺序读：
 
-1. `tax_agent/runtime/conversation.py`
-2. `tax_agent/runtime/agent_executor.py`
-3. `tax_agent/service/service_app.py`
-4. `tax_agent/service/batch_runtime.py`
-5. `tax_agent/runtime/checkpointing.py`
-6. `tax_agent/runtime/ag_ui_protocol.py`
+1. `tax_agent/agent/graph.py`
+2. `tax_agent/agent/instructions.py`
+3. `tax_agent/agent/tool_manifest.py`
+4. `tax_agent/business/answers/models.py`
+5. `tax_agent/business/references/tools.py`
+6. `tax_agent/runtime/executor.py`
+7. `tax_agent/delivery/http_api.py`
+8. `tax_agent/delivery/batch.py`
 
-暂时不要从 `legacy/`、`audit_trace.py` 或测试文件开始读；它们不是当前主路径。
+暂时不要从 `domain/`、`service/`、`io/`、`legacy/` 或测试文件开始读；这些不是当前主路径。
 
 ## 后续清理原则
 
-- 新增主路径能力时，优先放进 `runtime/`、`service/`、`domain/`、`io/` 中已有边界。
-- 兼容旧流程时，必须明确写在 `batch_runtime.py` 或 `legacy/`，不能混入主对话入口。
-- OpenGauss 和 Langfuse 是增强项；SQLite checkpoint 和 `observability=none` 是当前可运行基线。
-- 默认服务级 SQLite DB 是 `output/checkpoints/service.sqlite`；请求里的 `thread_id` 只作为 LangGraph configurable key，不再决定服务 DB 文件名。
+- 新增主路径能力时，优先放进 `agent/`、`business/`、`runtime/`、`delivery/` 四个边界。
+- 旧 import 兼容只能留在 wrapper 中，不得继续承载新功能。
+- 旧 `InteractionMode` / `response_strategy.py` 属于清理清单，不进入新架构。
+- `retrieve_tax_context` 只作为旧 tool 名兼容，不是新主路径。
 - 如果一个文件无法回答“谁调用我、为什么存在”，需要补文件头或移动目录。
 
-## F005 后的引用层阅读补充
+## Reference Layer 阅读补充
 
-F005 之后，法规/政策等外部引用材料的主路径是 `tax_agent/domain/reference_layer.py`。
+F005 之后，法规/政策等外部引用材料的主路径是 `tax_agent/business/references/`。
 
 新人阅读顺序建议：
 
-1. 先读 `tax_agent/domain/reference_layer.py`，理解 `ReferenceProvider`、`ReferenceManager`、`ReferenceBundle`、`Citation` 和 `find_tax_authorities`。
-2. 再读 `tax_agent/runtime/agent_executor.py`，看 `find_tax_authorities` 如何注册为 DeepAgents 主路径 tool。
-3. 最后读 `tax_agent/runtime/ag_ui_protocol.py`，看 tool output 如何进入 `TOOL_CALL_RESULT` 和 `RUN_FINISHED.result`。
-
-`tax_agent/domain/tax_retrieval.py` 不是新主路径。它只保留旧演讲 demo 的 `retrieve_tax_context` 名称和历史 `sources` payload 兼容解析，避免旧消息或历史测试丢失 citation。
-
-`tax_agent/legacy/` 也不是新主路径。它只保留历史实验、兼容测试和对照材料；当前 planning path 在 `tax_agent/runtime/agent_executor.py`，当前 reference path 在 `tax_agent/domain/reference_layer.py`。
+1. 先读 `tax_agent/business/references/models.py`，理解 `ReferenceBundle`、`ReferenceItem` 和 `Citation`。
+2. 再读 `tax_agent/business/references/providers.py` 和 `manager.py`，看 provider 如何接入。
+3. 再读 `tax_agent/business/references/tools.py`，看 `find_tax_authorities` 如何作为 DeepAgents tool adapter 暴露。
+4. 最后读 `tax_agent/runtime/ag_ui.py`，看 tool output 如何进入 `TOOL_CALL_RESULT` 和 `RUN_FINISHED.result`。

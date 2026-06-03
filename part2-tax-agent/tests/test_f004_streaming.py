@@ -57,7 +57,7 @@ def test_chat_stream_uses_executor_stream_turn_instead_of_execute_turn():
     assert "event: RUN_FINISHED" in body
 
 
-def test_chat_stream_progress_mode_filters_answer_delta():
+def test_chat_stream_ignores_removed_progress_mode_field():
     from fastapi.testclient import TestClient
 
     from tax_agent.service.service_app import create_app
@@ -87,20 +87,21 @@ def test_chat_stream_progress_mode_filters_answer_delta():
 
     assert response.status_code == 200
     assert "event: TEXT_MESSAGE_START" in body
-    assert "event: TEXT_MESSAGE_CONTENT" not in body
-    assert "hidden" not in body
+    assert "event: TEXT_MESSAGE_CONTENT" in body
+    assert "hidden" in body
     assert "event: TEXT_MESSAGE_END" in body
     assert "final answer" in body
 
 
-def test_chat_stream_rejects_structured_final_interaction_mode():
+def test_chat_stream_ignores_removed_structured_final_mode_field():
     from fastapi.testclient import TestClient
 
     from tax_agent.service.service_app import create_app
 
     class FakeExecutor:
         async def stream_turn(self, request):
-            raise AssertionError("invalid interaction mode should be rejected before streaming")
+            assert not hasattr(request, "interaction_mode")
+            yield {"event": "RUN_FINISHED", "data": {"threadId": request.thread_id, "result": {"answer": "ok"}}}
 
     payload = {**_chat_payload(), "interaction_mode": "structured_final"}
     app = create_app(lambda: FakeExecutor())
@@ -108,8 +109,8 @@ def test_chat_stream_rejects_structured_final_interaction_mode():
     with TestClient(app) as client:
         response = client.post("/chat/stream", json=payload)
 
-    assert response.status_code == 400
-    assert response.json()["error"] == "InvalidInteractionMode"
+    assert response.status_code == 200
+    assert "event: RUN_FINISHED" in response.text
 
 
 @pytest.mark.asyncio

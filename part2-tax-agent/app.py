@@ -2,7 +2,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from tax_agent.service.service_app import create_app
+from tax_agent.delivery.http_api import create_app
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]

@@ -7,7 +7,7 @@ Read `tax_agent/runtime/agent_executor.py` for the current planning path.
 
 from typing import Protocol
 
-from tax_agent.domain.intent_classifier import ClassifiedQuestion
+from tax_agent.business.analysis.intent_classifier import ClassifiedQuestion
 
 
 class PlannerAdapter(Protocol):
