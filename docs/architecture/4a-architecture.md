@@ -49,6 +49,8 @@ created: 2026-06-03
 
 这些边界通过**显式 adapter** 连接，而不是全部揉进 tool 或 middleware。
 
+开发时的具体设计准则见：[Agent Harness 设计准则](../guides/agent-harness-design-principles.md)。
+
 ### 2.2 模块结构
 
 ```text
