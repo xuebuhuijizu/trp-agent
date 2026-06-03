@@ -20,8 +20,7 @@ created: 2026-06-03
 │   └── Reference Layer  可扩展的引用提供者接口
 ├── 审计追溯            核心：运行过程可记录、可复现
 │   ├── Langfuse observability 观测平台（主观测）
-│   ├── LangGraph checkpoint state 持久化
-│   └── 本地 audit trace JSONL 兼容保留
+│   └── LangGraph checkpoint state 持久化
 └── 交互协议            核心：标准化的前端交互事件
     └── AG-UI protocol  对外唯一 streaming 协议
 ```
@@ -40,12 +39,14 @@ created: 2026-06-03
 
 ### 2.1 架构设计原则
 
-本项目的架构以 DeepAgents harness 为中心，但并非所有项目自有抽象都强行归为 DeepAgents 原生概念。参考 OpenHands、CrewAI、LangGraph 等明星项目，成熟 agent 项目会围绕 harness 建立多个一等边界：
+本项目的架构以 Agent Harness 为中心，但这里的 Harness 不是 DeepAgents 原生能力集合，而是**项目对模型的约束与可供性设计层**。DeepAgents / LangGraph 提供 planning、tool calling、skills、memory、filesystem、checkpoint 等机制；Harness 决定本项目如何配置、约束和暴露这些机制。
 
-- **Agent Harness**：DeepAgents `create_deep_agent` — 负责 planning、tool calling、skills、memory、filesystem
-- **Business Subsystems**：项目自有的稳定抽象，如引用/证据体系、确定性分析逻辑
-- **Runtime Adapters**：将 DeepAgents/LangGraph 能力适配到项目执行环境
-- **Delivery Surfaces**：不同形态的交付接口（HTTP、CLI、batch、前端）
+参考 OpenHands、CrewAI、LangGraph 等明星项目，成熟 agent 项目会围绕 harness 建立多个一等边界：
+
+- **Agent Harness**：项目对模型的 instructions、tool exposure、context policy、response format 接入方式的约束设计。
+- **Business Subsystems**：项目自有的稳定抽象，如引用/证据体系、确定性分析逻辑。
+- **Runtime Adapters**：将 DeepAgents/LangGraph 能力适配到项目执行环境。
+- **Delivery Surfaces**：不同形态的交付接口（HTTP、CLI、batch、前端）。
 
 这些边界通过**显式 adapter** 连接，而不是全部揉进 tool 或 middleware。
 
@@ -53,105 +54,108 @@ created: 2026-06-03
 
 ### 2.2 模块结构
 
+目标模块结构必须和四个架构层级一一对应。`app.py` 和 `main.py` 只保留为仓库根部的薄启动脚本，调用 `tax_agent.delivery`，不再作为应用架构层级。
+
 ```text
-tax_agent/
-│
-├── agent/                              # Agent Harness
-│   ├── graph.py                        # build_tax_agent(): create_deep_agent(...)
-│   ├── prompts.py                      # TAX_SYSTEM_PROMPT
-│   └── response_schema.py              # TaxAnswer / TaxCitation / TaxAnswerArtifact
-│
-├── references/                         # Business Subsystem: 引用/证据架构
-│   ├── models.py                       # Citation / ReferenceItem / ReferenceBundle
-│   ├── providers.py                    # ReferenceProvider / LocalTaxAuthorityProvider
-│   ├── manager.py                      # ReferenceManager（去重、排序、标准化）
-│   └── tools.py                        # find_tax_authorities: DeepAgents tool adapter
-│
-├── analysis/                           # Business Subsystem: 确定性分析
-│   ├── intent_classifier.py            # 意图分类（definition/rate/compliance）
-│   └── tax_context.py                  # analyze_tax_question / analyze_tax_context
-│
-├── runtime/                            # Runtime Adapters
-│   ├── agent_executor.py               # execute_turn / stream_turn 主编排
-│   ├── conversation.py                 # ConversationRequest / ConversationMessage
-│   ├── checkpointing.py                # LangGraph checkpointer 配置（SQLite/memory）
-│   ├── ag_ui_protocol.py               # DeepAgents raw events → AG-UI events
-│   ├── response_strategy.py            # InteractionMode 策略
-│   ├── observability.py                # Langfuse adapter
-│   └── sse_protocol.py                 # SSE 文本渲染
-│
-├── delivery/                           # Delivery Surfaces
-│   ├── http_api.py                     # FastAPI /chat, /chat/stream, /batch
-│   ├── batch.py                        # 文件批处理编排
-│   └── io/                             # 离线批处理输入输出
-│       ├── question_extractor.py       # txt/docx → questions
-│       └── output_formatter.py         # Markdown / JSON 报告
-│
-├── deprecated/                         # 明确待删除的兼容层
-│   ├── tax_retrieval.py                # 旧 find_tax_authorities 名，兼容 wrapper
-│   ├── planner.py                      # F001 静态 planner
-│   ├── rag_decorator.py                # F001 RAG decorator
-│   └── audit_trace.py                  # F003 本地 trace，当前非主路径
-│
-├── config.py                           # env/config
-├── main.py                             # CLI batch 入口
-└── app.py                              # FastAPI ASGI 入口
+part2-tax-agent/
+├── app.py                         # 薄入口：uvicorn app:app --port 3004
+├── main.py                        # 薄入口：CLI batch
+└── tax_agent/
+    ├── agent/                     # 1. Agent Harness
+    │   ├── graph.py               # build_tax_agent(): create_deep_agent(...)
+    │   ├── instructions.py        # system prompt / behavior constraints
+    │   ├── tool_manifest.py       # 暴露给模型的 tools 名称、描述、参数边界
+    │   └── context_policy.py      # skills / memory / filesystem 暴露策略
+    │
+    ├── business/                  # 2. Business Subsystems
+    │   ├── answers/
+    │   │   └── models.py          # TaxAnswer / TaxCitation / TaxAnswerArtifact
+    │   ├── references/
+    │   │   ├── models.py          # Citation / ReferenceItem / ReferenceBundle
+    │   │   ├── providers.py       # ReferenceProvider / LocalTaxAuthorityProvider
+    │   │   ├── manager.py         # ReferenceManager
+    │   │   └── tools.py           # find_tax_authorities: DeepAgents tool adapter
+    │   └── analysis/
+    │       ├── intent_classifier.py
+    │       └── tax_context.py     # analyze_tax_question / analyze_tax_context
+    │
+    ├── runtime/                   # 3. Runtime Adapters
+    │   ├── executor.py            # execute_turn / stream_turn 主编排
+    │   ├── conversation.py        # ConversationRequest / ConversationMessage
+    │   ├── checkpointing.py       # LangGraph checkpointer 配置
+    │   ├── ag_ui.py               # DeepAgents raw events → AG-UI events
+    │   ├── observability.py       # Langfuse adapter
+    │   ├── sse.py                 # SSE 文本渲染
+    │   └── config.py              # env/config
+    │
+    └── delivery/                  # 4. Delivery Surfaces
+        ├── http_api.py            # FastAPI /chat, /chat/stream, /batch
+        ├── batch.py               # 文件批处理编排
+        └── batch_io/
+            ├── question_extractor.py
+            └── output_formatter.py
 ```
 
 ### 2.3 文件归类与当前状态映射
 
-| 当前路径 | 新归类 | 性质 |
+| 当前路径 | 目标归类 | 性质 |
 |---------|--------|------|
-| `runtime/agent_executor.py` | `runtime/` | Runtime Adapter |
-| `runtime/checkpointing.py` | `runtime/` | Runtime Adapter |
-| `runtime/ag_ui_protocol.py` | `runtime/` | Runtime Adapter |
-| `runtime/conversation.py` | `runtime/` | Runtime Adapter |
-| `runtime/response_strategy.py` | `runtime/` | Runtime Adapter |
-| `runtime/observability.py` | `runtime/` | Runtime Adapter |
-| `runtime/sse_protocol.py` | `runtime/` | Runtime Adapter |
-| `domain/reference_layer.py` | → `references/` | Business Subsystem |
-| `domain/domain_knowledge.py` | → `analysis/` | Business Subsystem |
-| `domain/intent_classifier.py` | → `analysis/` | Business Subsystem |
-| `domain/tax_retrieval.py` | → `deprecated/` | 兼容层 |
-| `service/service_app.py` | → `delivery/http_api.py` | Delivery Surface |
-| `service/batch_runtime.py` | → `delivery/batch.py` | Delivery Surface |
-| `io/output_formatter.py` | → `delivery/io/` | Delivery Surface |
-| `io/question_extractor.py` | → `delivery/io/` | Delivery Surface |
-| `legacy/planner.py` | → `deprecated/` | 兼容层 |
-| `legacy/rag_decorator.py` | → `deprecated/` | 兼容层 |
-| `runtime/audit_trace.py` | → `deprecated/` | 兼容层 |
+| `runtime/agent_executor.py::build_agent` | `agent/graph.py` | Agent Harness 装配 |
+| `runtime/agent_executor.py::TAX_SYSTEM_PROMPT` | `agent/instructions.py` | Agent Harness 约束 |
+| `runtime/agent_executor.py::SKILL_SOURCES / MEMORY_SOURCES / FilesystemBackend` | `agent/context_policy.py` | Agent Harness 上下文策略 |
+| `runtime/agent_executor.py::tools=[...]` | `agent/tool_manifest.py` | Agent Harness 工具暴露策略 |
+| `runtime/agent_executor.py::TaxAnswer / TaxCitation` | `business/answers/models.py` | 业务输出契约 |
+| `runtime/agent_executor.py::ExecutionResult / AgentExecutor` | `runtime/executor.py` | Runtime Adapter |
+| `runtime/checkpointing.py` | `runtime/checkpointing.py` | Runtime Adapter |
+| `runtime/ag_ui_protocol.py` | `runtime/ag_ui.py` | Runtime Adapter |
+| `runtime/conversation.py` | `runtime/conversation.py` | Runtime Adapter |
+| `runtime/observability.py` | `runtime/observability.py` | Runtime Adapter |
+| `runtime/sse_protocol.py` | `runtime/sse.py` | Runtime Adapter |
+| `config.py` | `runtime/config.py` | Runtime Adapter |
+| `domain/reference_layer.py` | `business/references/` | Business Subsystem |
+| `domain/domain_knowledge.py` | `business/analysis/tax_context.py` | Business Subsystem |
+| `domain/intent_classifier.py` | `business/analysis/intent_classifier.py` | Business Subsystem |
+| `service/service_app.py` | `delivery/http_api.py` | Delivery Surface |
+| `service/batch_runtime.py` | `delivery/batch.py` | Delivery Surface |
+| `io/output_formatter.py` | `delivery/batch_io/` | Delivery Surface |
+| `io/question_extractor.py` | `delivery/batch_io/` | Delivery Surface |
+
+说明：上表只映射继续保留的主路径能力。旧 `InteractionMode` / `response_strategy.py`、旧 `retrieve_tax_context` wrapper、`legacy/*` 和本地 JSON trace 相关实现属于清理清单，不进入目标架构模块结构。
 
 ### 2.4 核心调用链
 
 ```text
 # 流式对话 (/chat/stream)
 delivery/http_api.py
-  → runtime/agent_executor.stream_turn()
+  → runtime/executor.stream_turn()
     → DeepAgents astream_events
-    → runtime/ag_ui_protocol.normalize_ag_ui_event()
-    → runtime/sse_protocol.render_sse()
+    → runtime/ag_ui.normalize_ag_ui_event()
+    → runtime/sse.render_sse()
 
 # 同步对话 (/chat)
 delivery/http_api.py
-  → runtime/agent_executor.execute_turn()
+  → runtime/executor.execute_turn()
     → DeepAgents ainvoke
-    → references/tools.find_tax_authorities
-    → analysis/tax_context.analyze_tax_context
+    → business/references/tools.find_tax_authorities
+    → business/analysis/tax_context.analyze_tax_context
+    → business/answers/models.TaxAnswer
 
 # 批处理 (/batch / CLI)
 delivery/batch.py / main.py
-  → delivery/io/question_extractor → analysis/intent_classifier
-  → runtime/agent_executor.execute_turn() (per question)
-  → delivery/io/output_formatter (Markdown + JSON)
+  → delivery/batch_io/question_extractor → business/analysis/intent_classifier
+  → runtime/executor.execute_turn() (per question)
+  → delivery/batch_io/output_formatter (Markdown + JSON)
 ```
 
-### 2.5 InteractionMode 策略
+### 2.5 AG-UI 后的交互策略
 
-| Mode | 适用接口 | 行为 |
-|------|---------|------|
-| `answer_stream` | `/chat/stream` | 默认，输出 AG-UI `TEXT_MESSAGE_CONTENT` |
-| `progress_stream` | `/chat/stream` | 过滤 `TEXT_MESSAGE_CONTENT`，保留 tool / final result 事件 |
-| `structured_final` | `/chat` | 返回完整 TaxAnswer JSON |
+引入 AG-UI 后，`InteractionMode` 不再作为架构级概念保留。架构层只保留稳定交付面：
+
+- `/chat/stream`：对外唯一 streaming 协议，输出 AG-UI SSE。
+- `/chat`：同步 JSON API，最终业务产物与 AG-UI `RUN_FINISHED.result` 对齐。
+- `/batch` / CLI：批处理交付面，不复用 `/chat/stream` 的 mode 模型。
+
+如后续需要“只看进度、不看文本 delta”这类视图差异，应作为 delivery 层的投影策略或前端展示策略处理，不回到 `InteractionMode` 枚举。
 
 ---
 
@@ -161,12 +165,12 @@ delivery/batch.py / main.py
 
 ```text
 输入文件 (.txt/.docx)
-   → delivery/io/question_extractor → list[str]
-   → analysis/intent_classifier → ClassifiedQuestion[]
-   → runtime/agent_executor → ExecutionResult
+   → delivery/batch_io/question_extractor → list[str]
+   → business/analysis/intent_classifier → ClassifiedQuestion[]
+   → runtime/executor → ExecutionResult
        → DeepAgents answer generation
-       → references/tools.find_tax_authorities → ReferenceBundle / Citation[]
-   → delivery/io/output_formatter → Markdown + JSON
+       → business/references/tools.find_tax_authorities → ReferenceBundle / Citation[]
+   → delivery/batch_io/output_formatter → Markdown + JSON
 ```
 
 ### 3.2 持久化存储
@@ -174,7 +178,6 @@ delivery/batch.py / main.py
 | 存储 | 技术 | 用途 | 生命周期 |
 |------|------|------|---------|
 | Checkpoint | SQLite (`service.sqlite`) | LangGraph state 持久化 | 持续累积 |
-| Audit Trace | JSONL 文件 | 兼容保留，非主路径 | 按需清理 |
 | 输出报告 | Markdown + JSON | 税审报告 | 按需保留 |
 | Langfuse | 外部服务 | 主观测 trace | 按需保留 |
 | 语义记忆 | DeepAgents memory + virtual filesystem | 跨对话参考材料 | 按需管理 |
