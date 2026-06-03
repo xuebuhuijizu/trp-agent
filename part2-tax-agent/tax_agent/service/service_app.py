@@ -99,21 +99,13 @@ def create_app(executor_factory: ExecutorFactory | None = None):
         executor = await _resolve_executor(factory)
 
         async def events() -> AsyncIterator[str]:
-            yield render_sse(
-                "run.started",
-                {
-                    "session_id": request.session_id,
-                    "trace_id": request.trace_id,
-                    "thread_id": request.thread_id,
-                },
-            )
             try:
                 async for event in executor.stream_turn(request):
-                    if event["event"] == "answer.delta" and not strategy.include_answer_delta:
+                    if event["event"] == "TEXT_MESSAGE_CONTENT" and not strategy.include_answer_delta:
                         continue
                     yield render_sse(event["event"], event["data"])
             except Exception as exc:
-                yield render_sse("run.error", {"error": type(exc).__name__, "message": str(exc)})
+                yield render_sse("RUN_ERROR", {"error": type(exc).__name__, "message": str(exc)})
 
         return StreamingResponse(events(), media_type="text/event-stream; charset=utf-8")
 

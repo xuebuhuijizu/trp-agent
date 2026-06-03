@@ -55,21 +55,21 @@ app.py
 
 ### 3. HTTP SSE 流式对话
 
-用途：把 DeepAgents 内部事件转换为稳定 SSE 协议。
+用途：把 DeepAgents 内部事件转换为 AG-UI SSE 协议。
 
 ```text
 app.py
   -> service_app.create_app(...)
   -> POST /chat/stream
   -> AgentExecutor.stream_turn(...)
-  -> stream_events.normalize_stream_event(...)
+  -> ag_ui_protocol.normalize_ag_ui_event(...)
   -> sse_protocol.render_sse(...)
 ```
 
 关键点：
 
 - `/chat/stream` 不调用 `execute_turn`。
-- `stream_events.py` 是 DeepAgents 原始事件到服务协议的适配层。
+- `ag_ui_protocol.py` 是 DeepAgents 原始事件到 AG-UI 事件的适配层。
 - `sse_protocol.py` 只负责序列化 SSE 文本。
 
 ## 文件角色表
@@ -83,7 +83,7 @@ app.py
 | `tax_agent/runtime/agent_executor.py` | DeepAgents 执行器 | 是 | 当前唯一的 Agent 调用封装 |
 | `tax_agent/runtime/conversation.py` | 请求/响应 schema | 是 | 统一 CLI、HTTP、SSE 的对话数据结构 |
 | `tax_agent/runtime/checkpointing.py` | checkpoint 工厂 | 是 | SQLite 优先，memory fallback，OpenGauss 兼容路径保留 |
-| `tax_agent/runtime/stream_events.py` | DeepAgents 事件适配 | 是 | 把框架事件归一化为稳定服务事件 |
+| `tax_agent/runtime/ag_ui_protocol.py` | AG-UI 协议适配 | 是 | 把框架事件归一化为 AG-UI 事件，管理 `runId` / `messageId` / `toolCallId` |
 | `tax_agent/runtime/sse_protocol.py` | SSE 文本协议 | 是 | 保持服务输出协议独立、可测试 |
 | `tax_agent/runtime/observability.py` | Langfuse 适配 | 可选 | Langfuse 未启用时 provider 为 `none` |
 | `tax_agent/domain/*` | 税务领域匹配和检索 | 是 | 为 tool、batch 分类和上下文分析提供确定性支持 |
@@ -103,7 +103,7 @@ app.py
 3. `tax_agent/service/service_app.py`
 4. `tax_agent/service/batch_runtime.py`
 5. `tax_agent/runtime/checkpointing.py`
-6. `tax_agent/runtime/stream_events.py`
+6. `tax_agent/runtime/ag_ui_protocol.py`
 
 暂时不要从 `legacy/`、`audit_trace.py` 或测试文件开始读；它们不是当前主路径。
 
@@ -123,7 +123,7 @@ F005 之后，法规/政策等外部引用材料的主路径是 `tax_agent/domai
 
 1. 先读 `tax_agent/domain/reference_layer.py`，理解 `ReferenceProvider`、`ReferenceManager`、`ReferenceBundle`、`Citation` 和 `find_tax_authorities`。
 2. 再读 `tax_agent/runtime/agent_executor.py`，看 `find_tax_authorities` 如何注册为 DeepAgents 主路径 tool。
-3. 最后读 `tax_agent/runtime/stream_events.py`，看 tool output 如何进入 `tool.finished` / `answer.finished` 的 citations。
+3. 最后读 `tax_agent/runtime/ag_ui_protocol.py`，看 tool output 如何进入 `TOOL_CALL_RESULT` 和 `RUN_FINISHED.result`。
 
 `tax_agent/domain/tax_retrieval.py` 不是新主路径。它只保留旧演讲 demo 的 `retrieve_tax_context` 名称和历史 `sources` payload 兼容解析，避免旧消息或历史测试丢失 citation。
 

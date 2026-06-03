@@ -27,19 +27,19 @@ async def test_stream_turn_suppresses_reasoning_only_output():
 
     assert events == [
         {
-            "event": "run.started",
+            "event": "RUN_STARTED",
             "data": {
-                "session_id": "sess",
-                "trace_id": "trace",
-                "thread_id": "thread",
+                "runId": "trace",
+                "threadId": "thread",
             },
         },
         {
-            "event": "run.error",
+            "event": "RUN_ERROR",
             "data": {
+                "runId": "trace",
+                "threadId": "thread",
                 "error": "ModelOutputError",
                 "message": "模型未产生最终回答，可能只输出了 reasoning 或当前模型不支持工具调用。",
-                "thread_id": "thread",
             },
         }
     ]
@@ -72,7 +72,7 @@ async def test_stream_turn_records_langfuse_adapter_error_for_reasoning_only_out
 
     events = [event async for event in executor.stream_turn(request)]
 
-    assert events[-1]["event"] == "run.error"
+    assert events[-1]["event"] == "RUN_ERROR"
     assert recorded == [
         {
             "name": "stream_adapter.error",

@@ -136,9 +136,9 @@ def test_opengauss_checkpoint_does_not_fallback_when_dependency_missing(tmp_path
 def test_sse_event_renderer_outputs_stable_protocol():
     from tax_agent.runtime.sse_protocol import render_sse
 
-    assert render_sse("run.started", {"thread_id": "thread-1"}) == (
-        'event: run.started\n'
-        'data: {"thread_id":"thread-1"}\n\n'
+    assert render_sse("RUN_STARTED", {"threadId": "thread-1"}) == (
+        'event: RUN_STARTED\n'
+        'data: {"threadId":"thread-1"}\n\n'
     )
 
 

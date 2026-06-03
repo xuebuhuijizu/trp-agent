@@ -26,21 +26,18 @@ def test_chat_stream_uses_executor_stream_turn_instead_of_execute_turn():
             raise AssertionError("/chat/stream must not call execute_turn")
 
         async def stream_turn(self, request):
-            yield {"event": "answer.started", "data": {"thread_id": request.thread_id}}
-            yield {"event": "answer.delta", "data": {"text": "first "}}
-            yield {"event": "answer.delta", "data": {"text": "second"}}
+            yield {"event": "TEXT_MESSAGE_START", "data": {"messageId": "msg-1", "role": "assistant"}}
+            yield {"event": "TEXT_MESSAGE_CONTENT", "data": {"messageId": "msg-1", "delta": "first "}}
+            yield {"event": "TEXT_MESSAGE_CONTENT", "data": {"messageId": "msg-1", "delta": "second"}}
             yield {
-                "event": "answer.finished",
-                "data": {
-                    "answer": "first second",
-                    "citations": [],
-                    "thread_id": request.thread_id,
-                },
+                "event": "TEXT_MESSAGE_END",
+                "data": {"messageId": "msg-1"},
             }
             yield {
-                "event": "run.finished",
+                "event": "RUN_FINISHED",
                 "data": {
-                    "thread_id": request.thread_id,
+                    "threadId": request.thread_id,
+                    "result": {"kind": "TaxAnswer", "data": {"answer": "first second", "citations": []}},
                 },
             }
 
@@ -52,12 +49,12 @@ def test_chat_stream_uses_executor_stream_turn_instead_of_execute_turn():
 
     assert response.status_code == 200
     assert "charset=utf-8" in response.headers["content-type"]
-    assert "event: answer.started" in body
-    assert body.count("event: answer.delta") == 2
-    assert "event: answer.finished" in body
+    assert "event: TEXT_MESSAGE_START" in body
+    assert body.count("event: TEXT_MESSAGE_CONTENT") == 2
+    assert "event: TEXT_MESSAGE_END" in body
     assert "first " in body
     assert "second" in body
-    assert "event: run.finished" in body
+    assert "event: RUN_FINISHED" in body
 
 
 def test_chat_stream_progress_mode_filters_answer_delta():
@@ -67,17 +64,19 @@ def test_chat_stream_progress_mode_filters_answer_delta():
 
     class FakeExecutor:
         async def stream_turn(self, request):
-            yield {"event": "answer.started", "data": {"thread_id": request.thread_id}}
-            yield {"event": "answer.delta", "data": {"text": "hidden"}}
+            yield {"event": "TEXT_MESSAGE_START", "data": {"messageId": "msg-1", "role": "assistant"}}
+            yield {"event": "TEXT_MESSAGE_CONTENT", "data": {"messageId": "msg-1", "delta": "hidden"}}
             yield {
-                "event": "answer.finished",
+                "event": "TEXT_MESSAGE_END",
+                "data": {"messageId": "msg-1"},
+            }
+            yield {
+                "event": "RUN_FINISHED",
                 "data": {
-                    "answer": "final answer",
-                    "citations": [],
-                    "thread_id": request.thread_id,
+                    "threadId": request.thread_id,
+                    "result": {"kind": "TaxAnswer", "data": {"answer": "final answer", "citations": []}},
                 },
             }
-            yield {"event": "run.finished", "data": {"thread_id": request.thread_id}}
 
     payload = {**_chat_payload(), "interaction_mode": "progress_stream"}
     app = create_app(lambda: FakeExecutor())
@@ -87,10 +86,10 @@ def test_chat_stream_progress_mode_filters_answer_delta():
             body = response.read().decode("utf-8")
 
     assert response.status_code == 200
-    assert "event: answer.started" in body
-    assert "event: answer.delta" not in body
+    assert "event: TEXT_MESSAGE_START" in body
+    assert "event: TEXT_MESSAGE_CONTENT" not in body
     assert "hidden" not in body
-    assert "event: answer.finished" in body
+    assert "event: TEXT_MESSAGE_END" in body
     assert "final answer" in body
 
 
@@ -114,7 +113,7 @@ def test_chat_stream_rejects_structured_final_interaction_mode():
 
 
 @pytest.mark.asyncio
-async def test_execute_stream_turn_maps_astream_events_to_stable_events():
+async def test_execute_stream_turn_maps_astream_events_to_ag_ui_events():
     class FakeStreamAgent:
         def __init__(self):
             self.payload = None
@@ -163,25 +162,48 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
     assert fake_agent.version == "v2"
     assert events == [
         {
-            "event": "run.started",
+            "event": "RUN_STARTED",
             "data": {
-                "session_id": "sess-stream",
-                "trace_id": "trace-stream",
-                "thread_id": "thread-stream",
+                "runId": "trace-stream",
+                "threadId": "thread-stream",
             },
         },
-        {"event": "answer.started", "data": {"thread_id": "thread-stream"}},
-        {"event": "answer.delta", "data": {"text": "hello "}},
-        {"event": "answer.delta", "data": {"text": "world"}},
         {
-            "event": "tool.started",
-            "data": {"name": "find_tax_authorities", "input": {"query": "vat"}},
+            "event": "TEXT_MESSAGE_START",
+            "data": {"messageId": "trace-stream:assistant", "role": "assistant"},
         },
         {
-            "event": "tool.finished",
+            "event": "TEXT_MESSAGE_CONTENT",
+            "data": {"messageId": "trace-stream:assistant", "delta": "hello "},
+        },
+        {
+            "event": "TEXT_MESSAGE_CONTENT",
+            "data": {"messageId": "trace-stream:assistant", "delta": "world"},
+        },
+        {
+            "event": "TOOL_CALL_START",
             "data": {
-                "name": "find_tax_authorities",
-                "source_ids": ["vat-regulation"],
+                "toolCallId": "trace-stream:tool:1",
+                "toolName": "find_tax_authorities",
+            },
+        },
+        {
+            "event": "TOOL_CALL_ARGS",
+            "data": {
+                "toolCallId": "trace-stream:tool:1",
+                "args": {"query": "vat"},
+            },
+        },
+        {
+            "event": "TOOL_CALL_END",
+            "data": {"toolCallId": "trace-stream:tool:1"},
+        },
+        {
+            "event": "TOOL_CALL_RESULT",
+            "data": {
+                "toolCallId": "trace-stream:tool:1",
+                "toolName": "find_tax_authorities",
+                "sourceIds": ["vat-regulation"],
                 "citations": [
                     {
                         "citation_id": "local_tax_authorities:vat-regulation",
@@ -194,30 +216,21 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
                         "confidence": 0.9,
                         "retrieved_at": None,
                         "metadata": {},
-                    }
-                ],
+                        }
+                    ],
+                "summary": "VAT",
             },
         },
         {
-            "event": "answer.finished",
+            "event": "TEXT_MESSAGE_END",
+            "data": {"messageId": "trace-stream:assistant"},
+        },
+        {
+            "event": "RUN_FINISHED",
             "data": {
-                "answer": "hello world",
-                    "citations": [
-                        {
-                            "citation_id": "local_tax_authorities:vat-regulation",
-                            "source_id": "vat-regulation",
-                            "source_type": "law",
-                            "provider_id": "local_tax_authorities",
-                            "title": "VAT",
-                            "locator": None,
-                            "snippet": "VAT",
-                            "confidence": 0.9,
-                            "retrieved_at": None,
-                            "metadata": {},
-                        }
-                    ],
-                "thread_id": "thread-stream",
-                "artifact": {
+                "runId": "trace-stream",
+                "threadId": "thread-stream",
+                "result": {
                     "kind": "TaxAnswer",
                     "data": {
                         "question": "stream this answer",
@@ -239,12 +252,6 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
                             ],
                     },
                 },
-            },
-        },
-        {
-            "event": "run.finished",
-            "data": {
-                "thread_id": "thread-stream",
             },
         },
     ]

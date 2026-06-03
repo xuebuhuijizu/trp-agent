@@ -21,6 +21,16 @@ from tax_agent.domain.domain_knowledge import analyze_tax_context, analyze_tax_q
 from tax_agent.domain.intent_classifier import ClassifiedQuestion, IntentClassifier
 from tax_agent.domain.reference_layer import find_tax_authorities
 from tax_agent.domain.tax_retrieval import extract_citations_from_messages
+from tax_agent.runtime.ag_ui_protocol import (
+    AgUiRunContext,
+    normalize_ag_ui_event,
+    run_error_event,
+    run_finished_event,
+    run_started_event,
+    text_message_content_event,
+    text_message_end_event,
+    text_message_start_event,
+)
 from tax_agent.runtime.checkpointing import (
     CheckpointConfig,
     build_async_checkpoint_config,
@@ -28,7 +38,6 @@ from tax_agent.runtime.checkpointing import (
 )
 from tax_agent.runtime.conversation import ConversationRequest
 from tax_agent.runtime.observability import build_langfuse_observability
-from tax_agent.runtime.stream_events import normalize_stream_event
 
 PART2_ROOT = Path(__file__).resolve().parents[2]
 SKILL_SOURCES = ["/skills"]
@@ -247,42 +256,34 @@ class AgentExecutor:
         final_messages: list[Any] = []
         reasoning_filter = ReasoningFilter()
         saw_tool_event = False
-        answer_started = False
+        text_started = False
+        context = AgUiRunContext.from_request(request)
 
-        yield {
-            "event": "run.started",
-            "data": {
-                "session_id": request.session_id,
-                "trace_id": request.trace_id,
-                "thread_id": request.thread_id,
-            },
-        }
+        yield run_started_event(context)
 
         async for raw_event in self._astream_events(payload, config):
-            normalized = normalize_stream_event(raw_event)
-            if not normalized:
+            normalized_events = normalize_ag_ui_event(raw_event, context)
+            if not normalized_events:
                 output = raw_event.get("data", {}).get("output") if isinstance(raw_event, dict) else None
                 if isinstance(output, dict) and isinstance(output.get("messages"), list):
                     final_messages = output["messages"]
                 continue
-            if normalized["event"] == "answer.delta":
-                text = reasoning_filter.filter(normalized["data"]["text"])
-                if not text:
-                    continue
-                normalized["data"]["text"] = text
-                answer_parts.append(text)
-                if not answer_started:
-                    yield {
-                        "event": "answer.started",
-                        "data": {"thread_id": request.thread_id},
-                    }
-                    answer_started = True
-            if normalized["event"] == "tool.finished":
-                saw_tool_event = True
-                citations.extend(normalized["data"].get("citations", []))
-            if normalized["event"] == "tool.started":
-                saw_tool_event = True
-            yield normalized
+            for normalized in normalized_events:
+                if normalized["event"] == "TEXT_MESSAGE_CONTENT":
+                    text = reasoning_filter.filter(normalized["data"]["delta"])
+                    if not text:
+                        continue
+                    normalized["data"]["delta"] = text
+                    answer_parts.append(text)
+                    if not text_started:
+                        yield text_message_start_event(context)
+                        text_started = True
+                if normalized["event"] == "TOOL_CALL_RESULT":
+                    saw_tool_event = True
+                    citations.extend(normalized["data"].get("citations", []))
+                if normalized["event"] == "TOOL_CALL_START":
+                    saw_tool_event = True
+                yield normalized
 
         answer = self._clean_answer("".join(answer_parts))
         if not answer and final_messages:
@@ -305,34 +306,18 @@ class AgentExecutor:
                 status_message="Model produced no usable final answer in /chat/stream adapter.",
             )
             yield {
-                "event": "run.error",
-                "data": {
-                    "error": "ModelOutputError",
-                    "message": "模型未产生最终回答，可能只输出了 reasoning 或当前模型不支持工具调用。",
-                    "thread_id": request.thread_id,
-                },
+                **run_error_event(
+                    context,
+                    "ModelOutputError",
+                    "模型未产生最终回答，可能只输出了 reasoning 或当前模型不支持工具调用。",
+                )
             }
             return
-        if not answer_started:
-            yield {
-                "event": "answer.started",
-                "data": {"thread_id": request.thread_id},
-            }
-        yield {
-            "event": "answer.finished",
-            "data": {
-                "answer": answer,
-                "citations": citations,
-                "thread_id": request.thread_id,
-                "artifact": self._tax_answer_artifact(request, answer, citations),
-            },
-        }
-        yield {
-            "event": "run.finished",
-            "data": {
-                "thread_id": request.thread_id,
-            },
-        }
+        if not text_started:
+            yield text_message_start_event(context)
+            yield text_message_content_event(context, answer)
+        yield text_message_end_event(context)
+        yield run_finished_event(context, self._tax_answer_artifact(request, answer, citations))
 
     async def _astream_events(self, payload: dict, config: dict) -> AsyncIterator[dict]:
         try:

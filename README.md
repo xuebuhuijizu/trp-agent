@@ -113,7 +113,7 @@ curl http://127.0.0.1:3004/health
 主要接口：
 
 - `POST /chat`
-- `POST /chat/stream`
+- `POST /chat/stream`（AG-UI SSE）
 - `POST /batch`
 - `GET /state/history`
 
