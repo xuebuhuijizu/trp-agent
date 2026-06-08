@@ -19,52 +19,50 @@ feature_ids: [F004, F005, F006]
 
 只读证据：
 
-- 当前 HEAD：`606951a docs: sync README and guides after domain/service/io removal`
+- 当前 HEAD：`573be16 docs: add file audit, fix doc paths, split reference layer`
 - 分支状态：`master...origin/master`
 - tracked 文件数量：按 `git ls-files` 审计
-- 当前 `part2-tax-agent/tax_agent` tracked 主结构：`agent/`、`business/`、`delivery/`、`legacy/`、`runtime/`
+- 当前 `part2-tax-agent/tax_agent` tracked 主结构：`agent/`、`business/`、`delivery/`、`runtime/`
 
 非 tracked 结构噪音：
 
-- `part2-tax-agent/tax_agent/__pycache__/` 仍存在于工作目录。它不是 Git 文件，但会干扰肉眼验收，建议清理。
+- `part2-tax-agent/tax_agent/__pycache__/` 已清理。它不是 Git 文件，但会干扰肉眼验收；后续如测试重新生成，不应进入 Git。
 
 ## 总体结论
 
-代码主目录已经从旧 `domain/` / `service/` / `io/` 切到 4A 结构，但迁移还没有完全收口。
+代码主目录已经从旧 `domain/` / `service/` / `io/` 切到 4A 结构；本轮修订进一步删除了 `legacy/`、旧 config import、旧 runtime protocol/import wrapper 和旧 `retrieve_tax_context` tool 名。
 
-主要问题不是“旧目录还在 Git 里”，而是：
+当前剩余问题不是“旧目录还在 Git 里”，而是：
 
-1. 文档仍有旧结构残留和路径拼接错误。
-2. `business/references/_legacy_reference_layer.py` 承载了当前 Reference Layer 主实现，文件名与职责冲突。
-3. `runtime/executor.py` 过长，混合了执行边界、兼容 API、prompt 构造、artifact 组装、state 序列化和 reasoning 清洗。
-4. `runtime/*_protocol.py`、`runtime/agent_executor.py`、`runtime/response_strategy.py` 等兼容薄文件仍在，位置合理但应有删除计划。
-5. 测试仍保留大量 legacy 行为测试，合理但需要明确“保护迁移兼容”还是“继续保留产品能力”。
+1. `runtime/executor.py` 过长，混合了执行边界、兼容 API、prompt 构造、artifact 组装、state 序列化和 reasoning 清洗。
+2. `business/references/` 已拆出主实现，但需要继续保持 model/provider/manager/tool 的单一职责边界。
+3. 测试仍有可拆分空间，尤其是 `test_tax_agent.py` 和 F004 相关大文件。
 
 ## 高优先级发现
 
-### P1: 文档结构与实际目录仍不一致
+### 已修复: 文档结构与实际目录不一致
 
-- `docs/guides/part2-tax-agent-runtime-architecture.md` 仍声明 `domain/ service/ io/` 是旧路径兼容 wrapper。
-- `docs/guides/part2-tax-agent-current-runtime.md` 仍在文件角色表中列出 `tax_agent/domain/*` / `service/*` / `io/*`。
-- 同一批文档里出现 `delivery/batch_delivery/batch_io/question_extractor`，应为 `delivery/batch_io/question_extractor`。
+- `docs/guides/part2-tax-agent-runtime-architecture.md` 已移除当前结构中的旧目录兼容层。
+- `docs/guides/part2-tax-agent-current-runtime.md` 已移除 `legacy/` 和旧 config/tool 兼容描述。
+- `delivery/batch_delivery/batch_io/question_extractor` 路径错误已修为 `delivery/batch_io/question_extractor`。
 
 影响：铲屎官按架构图 2.2 验收时会继续看到“文档说有旧目录，但代码删了”的矛盾。
 
-建议：立即修正文档，让“旧目录已删除，旧能力已迁到 business/ 和 delivery/”成为唯一表述。
+当前结论：文档应继续保持“旧目录已删除，旧能力已迁到 business/ 和 delivery/”的唯一表述。
 
-### P1: Reference Layer 主实现藏在 `_legacy_reference_layer.py`
+### 已修复: Reference Layer 主实现藏在 `_legacy_reference_layer.py`
 
-`business/references/manager.py`、`models.py`、`providers.py` 都只是从 `_legacy_reference_layer.py` re-export。当前主业务能力不应以 `_legacy` 命名承载。
+`business/references/manager.py`、`models.py`、`providers.py` 已承载各自实现，`_legacy_reference_layer.py` 已删除。
 
-影响：与 4A 架构中的 Business Subsystems 命名不符，也会让扩展 provider、model、manager 时继续改 legacy 文件。
+影响：已解除。后续扩展 provider、model、manager 时应继续在对应文件内演进，不再创建 legacy wrapper。
 
-建议：把 `_legacy_reference_layer.py` 拆回：
+当前结构：
 
 - `business/references/models.py`
 - `business/references/providers.py`
 - `business/references/manager.py`
 
-保留 `tools.py` 作为 DeepAgents tool adapter。
+`tools.py` 保留为 DeepAgents tool adapter，当前唯一 tool 名为 `find_tax_authorities`。
 
 ### P1: `runtime/executor.py` 过长且职责偏多
 
@@ -73,7 +71,7 @@ feature_ids: [F004, F005, F006]
 - `AgentExecutor`
 - `ExecutionResult`
 - `ReasoningFilter`
-- legacy `execute(...)`
+- compatibility `execute(...)`
 - prompt 构造
 - artifact 构造
 - tool event 收集
@@ -85,20 +83,22 @@ feature_ids: [F004, F005, F006]
 - `runtime/executor.py`：只保留 public runtime boundary。
 - `runtime/output_cleaning.py`：`ReasoningFilter`。
 - `runtime/result_mapping.py`：structured result、artifact、tool event 映射。
-- legacy `execute(...)` / `_build_prompt(...)` 若仅测试兼容，移到 `legacy/` 或删除。
+- compatibility `execute(...)` / `_build_prompt(...)` 若仅测试兼容，应删除或改为测试 fixture；不再移动到 `legacy/`。
 
-### P2: 兼容模块过多但没有删除条件
+### 已修复: 兼容模块过多但没有删除条件
 
-以下文件很短，存在是为了兼容旧 import 或旧概念：
+以下文件已删除：
 
 - `runtime/agent_executor.py`
 - `runtime/ag_ui_protocol.py`
 - `runtime/sse_protocol.py`
 - `runtime/response_strategy.py`
+- `tax_agent/config.py`
+- `business/references/_legacy_reference_layer.py`
 - `legacy/planner.py`
 - `legacy/rag_decorator.py`
 
-这些文件可以暂留，但需要在文档中明确删除条件。否则“deprecated 不是 layer”会变成永久层。
+当前结论：不再保留这些 deprecated compatibility 文件；测试中增加“旧入口不存在”约束，防止回流。
 
 ### P2: 根目录/Part 2 根目录脚本归类可更清晰
 
@@ -146,7 +146,7 @@ feature_ids: [F004, F005, F006]
 | `docs/features/F002-deepagents-native-tax-agent-spec.md` | 139 | 保留 | 好 | 合理 | 合理。DeepAgents-native 边界真相源。 |
 | `docs/features/F003-audit-trace-and-domain-skills-spec.md` | 172 | 保留 | 好 | 合理 | 合理。skills/audit trace 背景。 |
 | `docs/features/F004-conversation-runtime-persistence-observability-service-spec.md` | 214 | 保留 | 好 | 合理 | 合理但较长。可拆验收摘要。 |
-| `docs/features/F005-reference-layer-spec.md` | 61 | 保留 | 好 | 合理 | 合理。Reference Layer 仍需同步 `_legacy_reference_layer.py` 重命名计划。 |
+| `docs/features/F005-reference-layer-spec.md` | 61 | 保留 | 好 | 合理 | 合理。Reference Layer 已完成主实现拆分；历史 spec 中的旧 tool 名保留为阶段记录。 |
 | `docs/features/F006-ag-ui-interaction-protocol-spec.md` | 125 | 保留 | 好 | 合理 | 合理。AG-UI 唯一协议真相源。 |
 | `docs/guides/2026-05-27-project-diff-and-migration-notes.md` | 232 | 保留 | 一般 | 偏长 | 合理。历史迁移记录，建议作为 archive guide。 |
 | `docs/guides/agent-harness-design-principles.md` | 73 | 保留 | 好 | 合理 | 合理。架构边界说明清楚。 |
@@ -210,6 +210,7 @@ feature_ids: [F004, F005, F006]
 | `tax_agent/agent/graph.py` | 23 | 保留 | 好 | 合理 | 合理。Agent Harness 装配入口。 |
 | `tax_agent/agent/instructions.py` | 4 | 保留 | 一般 | 偏短 | 合理。当前 prompt 过短，长期应转移更多规则到 skills/memory。 |
 | `tax_agent/agent/tool_manifest.py` | 3 | 保留 | 好 | 合理 | 合理。tool exposure 单一真相源。 |
+| `tax_agent/config.py` | 3 | 已删除 | 弱 | 过短 | 旧 pre-migration config import，已删除；当前唯一 config 入口是 `tax_agent/runtime/config.py`。 |
 
 ### tax_agent/business
 
@@ -222,10 +223,10 @@ feature_ids: [F004, F005, F006]
 | `tax_agent/business/answers/__init__.py` | 0 | 保留 | 不适用 | 合理 | 合理。package marker。 |
 | `tax_agent/business/answers/models.py` | 18 | 保留 | 好 | 合理 | 合理。业务输出契约。 |
 | `tax_agent/business/references/__init__.py` | 0 | 保留 | 不适用 | 合理 | 合理。package marker。 |
-| `tax_agent/business/references/_legacy_reference_layer.py` | 132 | 保留但需重命名/拆分 | 弱 | 可精简 | 位置在 business 合理，文件名不合理。当前主实现不应叫 legacy。 |
-| `tax_agent/business/references/manager.py` | 2 | 暂留 | 弱 | 过短 | 不理想。只是 re-export，应承载 `ReferenceManager` 实现。 |
-| `tax_agent/business/references/models.py` | 2 | 暂留 | 弱 | 过短 | 不理想。只是 re-export，应承载 model 定义。 |
-| `tax_agent/business/references/providers.py` | 6 | 暂留 | 弱 | 过短 | 不理想。只是 re-export，应承载 provider 实现。 |
+| `tax_agent/business/references/_legacy_reference_layer.py` | 24 | 已删除 | 弱 | 过短 | 旧 Reference Layer compatibility wrapper，已删除。 |
+| `tax_agent/business/references/manager.py` | 29 | 保留 | 好 | 合理 | 合理。承载 `ReferenceManager` 与默认 manager。 |
+| `tax_agent/business/references/models.py` | 56 | 保留 | 好 | 合理 | 合理。承载 Citation/ReferenceItem/ReferenceBundle。 |
+| `tax_agent/business/references/providers.py` | 59 | 保留 | 好 | 合理 | 合理。承载 provider protocol 与本地 seed provider。 |
 | `tax_agent/business/references/tools.py` | 68 | 保留 | 好 | 合理 | 合理。DeepAgents tool adapter 与 citation extraction。 |
 
 ### tax_agent/runtime
@@ -234,17 +235,17 @@ feature_ids: [F004, F005, F006]
 |---|---:|---|---|---|---|
 | `tax_agent/runtime/__init__.py` | 0 | 保留 | 不适用 | 合理 | 合理。package marker。 |
 | `tax_agent/runtime/ag_ui.py` | 164 | 保留 | 好 | 合理 | 合理。AG-UI event 投影边界清楚。 |
-| `tax_agent/runtime/ag_ui_protocol.py` | 2 | 暂留 | 弱 | 过短 | 兼容 re-export。若无旧 import，可删除。 |
-| `tax_agent/runtime/agent_executor.py` | 11 | 暂留 | 弱 | 过短 | 兼容旧 import。建议设删除条件。 |
+| `tax_agent/runtime/ag_ui_protocol.py` | 2 | 已删除 | 弱 | 过短 | 旧 AG-UI import wrapper，已删除。 |
+| `tax_agent/runtime/agent_executor.py` | 11 | 已删除 | 弱 | 过短 | 旧 executor import wrapper，已删除。 |
 | `tax_agent/runtime/audit_trace.py` | 137 | 保留 | 一般 | 合理 | 位置可接受，但 audit trace 更像 observability 子能力，可考虑并入 `runtime/observability/` 包。 |
 | `tax_agent/runtime/checkpointing.py` | 152 | 保留 | 好 | 合理 | 合理。checkpoint 工厂复杂度可接受。 |
 | `tax_agent/runtime/config.py` | 18 | 保留 | 好 | 合理 | 合理。runtime env/config。 |
 | `tax_agent/runtime/conversation.py` | 34 | 保留 | 好 | 合理 | 合理。HTTP/SSE/batch 对话 schema。 |
 | `tax_agent/runtime/executor.py` | 370 | 保留但需拆分 | 一般 | 过长 | 位置合理，内部职责过多。建议拆 mapping/cleaning/legacy。 |
 | `tax_agent/runtime/observability.py` | 56 | 保留 | 好 | 合理 | 合理。Langfuse adapter。 |
-| `tax_agent/runtime/response_strategy.py` | 11 | 暂留 | 弱 | 过短 | Deprecated compatibility module。若测试/旧 import 不再需要，应删除。 |
+| `tax_agent/runtime/response_strategy.py` | 11 | 已删除 | 弱 | 过短 | 旧 InteractionMode compatibility module，已删除。 |
 | `tax_agent/runtime/sse.py` | 6 | 保留 | 一般 | 合理 | 合理。SSE 文本渲染独立。 |
-| `tax_agent/runtime/sse_protocol.py` | 3 | 暂留 | 弱 | 过短 | 兼容 re-export。若无旧 import，可删除。 |
+| `tax_agent/runtime/sse_protocol.py` | 3 | 已删除 | 弱 | 过短 | 旧 SSE import wrapper，已删除。 |
 
 ### tax_agent/delivery
 
@@ -259,11 +260,7 @@ feature_ids: [F004, F005, F006]
 
 ### tax_agent/legacy
 
-| 文件 | 行数 | 必要性 | 扩展性 | 精简性 | 位置与架构判断 |
-|---|---:|---|---|---|---|
-| `tax_agent/legacy/__init__.py` | 0 | 暂留 | 不适用 | 合理 | 合理。legacy 隔离区。 |
-| `tax_agent/legacy/planner.py` | 39 | 暂留 | 弱 | 合理 | 位置合理。若旧 planner 只服务测试，应删除或改为测试 fixture。 |
-| `tax_agent/legacy/rag_decorator.py` | 23 | 暂留 | 弱 | 合理 | 位置合理。只保留历史示例兼容，不能进入主路径。 |
+`tax_agent/legacy/` 已删除。重构目标是移除旧静态 planner、旧 RAG decorator 和历史 demo 包袱；后续不再为这些旧能力保留 package。
 
 ### tests
 
@@ -297,22 +294,22 @@ feature_ids: [F004, F005, F006]
 
 ### 第二批：Reference Layer 命名收口
 
-1. 将 `_legacy_reference_layer.py` 拆到 `models.py`、`providers.py`、`manager.py`。
-2. 删除 `_legacy_reference_layer.py` 或只保留真正 legacy adapter。
-3. 更新 tests import。
+1. `_legacy_reference_layer.py` 已拆到 `models.py`、`providers.py`、`manager.py`。
+2. `_legacy_reference_layer.py` 已删除，不保留 legacy adapter。
+3. tests import 已更新到正式模块。
 
 ### 第三批：Runtime 过宽拆分
 
 1. 从 `runtime/executor.py` 拆出 `ReasoningFilter`。
 2. 拆出 result/artifact mapping。
-3. 将 legacy `execute(...)` / static plan prompt 移到 `legacy/` 或删除。
+3. 删除 compatibility `execute(...)` / static plan prompt，或改为测试 fixture；不再移动到 `legacy/`。
 
 ### 第四批：测试结构整理
 
 1. 拆 `test_tax_agent.py`。
 2. 拆 F004 大测试文件。
-3. 为 compat/deprecated 文件增加删除条件测试，避免永久兼容层。
+3. 为已删除的 compat/deprecated 入口保留不存在性测试，避免永久兼容层回流。
 
 ## 当前最小验收口径
 
-如果只判断“目录是否已经按架构图 2.2 迁移”，代码层面基本通过；如果判断“整个项目每个文件都与架构设计一致”，还不能通过。关键阻塞是文档残留、Reference Layer 主实现命名，以及 runtime executor 过宽。
+如果只判断“目录是否已经按架构图 2.2 迁移”，代码层面通过；如果判断“整个项目每个文件都与架构设计一致”，剩余主要风险是 `runtime/executor.py` 过宽、部分测试文件过长，以及部分历史讨论文档仍保留旧概念作为历史上下文。

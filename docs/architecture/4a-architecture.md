@@ -120,7 +120,7 @@ part2-tax-agent/
 | `io/output_formatter.py` | `delivery/batch_io/` | Delivery Surface |
 | `io/question_extractor.py` | `delivery/batch_io/` | Delivery Surface |
 
-说明：上表只映射继续保留的主路径能力。旧 `InteractionMode` / `response_strategy.py`、旧 `retrieve_tax_context` wrapper、`legacy/*` 和本地 JSON trace 相关实现属于清理清单，不进入目标架构模块结构。
+说明：上表是历史到当前结构的迁移映射，不代表这些旧路径仍存在。旧 `InteractionMode` / `response_strategy.py`、旧 `retrieve_tax_context` tool 名、`legacy/*` 和本地 JSON trace 相关实现已从当前目标模块结构中移除。
 
 ### 2.4 核心调用链
 

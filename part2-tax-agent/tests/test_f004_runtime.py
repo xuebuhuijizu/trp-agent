@@ -5,9 +5,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from tax_agent.config import AgentConfig
+from tax_agent.runtime.config import AgentConfig
 from tax_agent.business.analysis.tax_context import analyze_tax_context
-from tax_agent.runtime.agent_executor import AgentExecutor
+from tax_agent.runtime.executor import AgentExecutor
 from tax_agent.runtime.checkpointing import build_async_checkpoint_config, build_checkpoint_config
 from tax_agent.runtime.conversation import ConversationMessage, ConversationRequest
 
@@ -134,7 +134,7 @@ def test_opengauss_checkpoint_does_not_fallback_when_dependency_missing(tmp_path
 
 
 def test_sse_event_renderer_outputs_stable_protocol():
-    from tax_agent.runtime.sse_protocol import render_sse
+    from tax_agent.runtime.sse import render_sse
 
     assert render_sse("RUN_STARTED", {"threadId": "thread-1"}) == (
         'event: RUN_STARTED\n'

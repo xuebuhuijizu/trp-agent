@@ -31,7 +31,7 @@ def test_audit_trace_writes_jsonl_and_summary(tmp_path):
     recorder.record_skill_selected("q1", "tax-finance-logic-decomposition")
     recorder.record_tool_call(
         "q1",
-        tool_name="retrieve_tax_context",
+        tool_name="find_tax_authorities",
         args_summary={"query": "增值税"},
         source_ids=["vat-regulation"],
         latency_ms=12,

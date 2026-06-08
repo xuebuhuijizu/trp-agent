@@ -2,8 +2,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from tax_agent.config import AgentConfig
-from tax_agent.runtime.agent_executor import AgentExecutor
+from tax_agent.runtime.config import AgentConfig
+from tax_agent.runtime.executor import AgentExecutor
 from tax_agent.runtime.conversation import ConversationMessage, ConversationRequest
 from tax_agent.runtime.observability import ObservabilityConfig
 

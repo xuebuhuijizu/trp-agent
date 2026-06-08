@@ -14,7 +14,7 @@ created: 2026-06-03
 - Runtime：F004 已完成 conversation runtime、checkpoint、observability 和 AG-UI streaming 协议；旧 `InteractionMode` 不再作为架构级概念保留。
 - Reference Layer：F005 已完成第一版 `ReferenceProvider` / `ReferenceManager` / `ReferenceBundle` / `Citation`。
 - 主 Agent tool：`find_tax_authorities`。
-- 旧 tool：`retrieve_tax_context` 仅保留为兼容 wrapper，不是新主路径。
+- 主 Agent tool：`find_tax_authorities`。旧 `retrieve_tax_context` tool 名已删除。
 
 ## 目录速览
 

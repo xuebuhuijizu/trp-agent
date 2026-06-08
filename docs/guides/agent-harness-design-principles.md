@@ -66,7 +66,7 @@ HTTP `/chat`、HTTP `/chat/stream`、CLI batch、未来 frontend 都是 delivery
 
 ### 1.5 Deprecated 不是 layer，是隔离区
 
-`legacy/`、旧 `retrieve_tax_context`、旧静态 planner、旧 RAG decorator 只能作为 deprecated compatibility 存在。
+旧 `legacy/` 目录、旧 `retrieve_tax_context`、旧静态 planner、旧 RAG decorator 已删除；后续不得重新引入 deprecated compatibility 层。
 
 判断规则：
 

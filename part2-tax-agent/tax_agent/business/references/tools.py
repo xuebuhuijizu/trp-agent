@@ -10,17 +10,12 @@ def find_tax_authorities(query: str) -> str:
     return json.dumps(bundle.to_dict(), ensure_ascii=False)
 
 
-def retrieve_tax_context(query: str) -> str:
-    """Compatibility wrapper for the old demo retrieval tool name."""
-    return find_tax_authorities(query)
-
-
 def extract_citations_from_messages(messages: list[Any]) -> list[dict]:
     citations = []
     seen = set()
     for message in messages:
         name = _message_value(message, "name") or _message_value(message, "tool_name")
-        if name not in {"find_tax_authorities", "retrieve_tax_context"}:
+        if name != "find_tax_authorities":
             continue
         payload = _parse_tool_payload(_message_value(message, "content"))
         for citation in payload.get("citations", []):
@@ -29,13 +24,6 @@ def extract_citations_from_messages(messages: list[Any]) -> list[dict]:
                 continue
             seen.add(source_id)
             citations.append(citation)
-        for source in payload.get("sources", []):
-            source_id = source.get("source_id")
-            title = source.get("title")
-            if not source_id or not title or source_id in seen:
-                continue
-            seen.add(source_id)
-            citations.append({"source_id": source_id, "title": title})
     return citations
 
 
@@ -60,5 +48,4 @@ def _message_value(message: Any, key: str):
 __all__ = [
     "extract_citations_from_messages",
     "find_tax_authorities",
-    "retrieve_tax_context",
 ]

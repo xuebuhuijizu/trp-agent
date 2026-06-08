@@ -1,5 +1,4 @@
 ﻿import asyncio
-import importlib
 import sys
 import tempfile
 from pathlib import Path
@@ -7,12 +6,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from tax_agent.config import AgentConfig
+from tax_agent.runtime.config import AgentConfig
 from tax_agent.business.analysis.intent_classifier import ClassifiedQuestion, IntentClassifier
 from tax_agent.delivery.batch_io.output_formatter import OutputFormatter
 from tax_agent.delivery.batch_io.question_extractor import _split_questions, extract_questions
-from tax_agent.legacy.planner import DefaultPlanner, Planner
-from tax_agent.legacy.rag_decorator import NoopRAG, RAGDecorator
+from tax_agent.runtime import executor as agent_executor
 
 
 class TestQuestionExtractor:
@@ -96,38 +94,6 @@ class TestIntentClassifier:
         assert result.intent == "rate"
 
 
-class TestPlanner:
-    def test_default_planner_definition(self):
-        planner = Planner()
-        q = ClassifiedQuestion(text="什么是增值税", intent="definition")
-        plan = planner.plan_for_question(q)
-        assert len(plan) > 0
-        assert all(isinstance(s, str) for s in plan)
-
-    def test_default_planner_rate(self):
-        planner = Planner()
-        q = ClassifiedQuestion(text="企业所得税税率", intent="rate")
-        plan = planner.plan_for_question(q)
-        assert len(plan) > 0
-
-    def test_default_planner_compliance(self):
-        planner = Planner()
-        q = ClassifiedQuestion(text="需要申报吗", intent="compliance")
-        plan = planner.plan_for_question(q)
-        assert len(plan) > 0
-
-    def test_plan_batch(self):
-        planner = Planner()
-        questions = [
-            ClassifiedQuestion(text="什么是增值税", intent="definition"),
-            ClassifiedQuestion(text="税率多少", intent="rate"),
-        ]
-        plans = planner.plan_batch(questions)
-        assert len(plans) == 2
-        assert "什么是增值税" in plans
-        assert "税率多少" in plans
-
-
 class TestOutputFormatter:
     def test_format_includes_both_outputs(self):
         formatter = OutputFormatter()
@@ -184,27 +150,6 @@ class TestOutputFormatter:
         assert Path(paths["json"]).exists()
 
 
-class TestRAGDecorator:
-    def test_noop_rag_returns_empty(self):
-        rag = NoopRAG()
-        result = asyncio.run(rag.retrieve("test"))
-        assert result == []
-
-    def test_decorator_enrich_without_rag(self):
-        decorator = RAGDecorator()
-        result = asyncio.run(decorator.enrich("test", "context"))
-        assert result == "context"
-
-    def test_decorator_custom_adapter(self):
-        class FakeRAG:
-            async def retrieve(self, query, top_k=5):
-                return ["doc1", "doc2"]
-
-        decorator = RAGDecorator(FakeRAG())
-        result = asyncio.run(decorator.enrich("test", "ctx"))
-        assert "doc1" in result
-
-
 class TestAgentExecutor:
     def test_build_agent_uses_config(self, monkeypatch):
         deepagents_calls = []
@@ -234,8 +179,6 @@ class TestAgentExecutor:
             "deepagents.backends",
             SimpleNamespace(FilesystemBackend=FilesystemBackend),
         )
-        agent_executor = importlib.import_module("tax_agent.runtime.agent_executor")
-
         config = AgentConfig(model="ollama:test", temperature=0.2, max_tokens=1234)
         executor = agent_executor.AgentExecutor(config)
 
@@ -267,7 +210,6 @@ class TestAgentExecutor:
                 return {"messages": [{"content": "first"}, {"content": "final answer"}]}
 
         fake_agent = FakeAgent()
-        agent_executor = importlib.import_module("tax_agent.runtime.agent_executor")
         executor = agent_executor.AgentExecutor(AgentConfig(), agent=fake_agent)
         question = ClassifiedQuestion(text="什么是增值税", intent="definition")
 
@@ -298,7 +240,6 @@ class TestAgentExecutor:
                 }
 
         fake_agent = FakeAgent()
-        agent_executor = importlib.import_module("tax_agent.runtime.agent_executor")
         executor = agent_executor.AgentExecutor(AgentConfig(), agent=fake_agent)
         question = ClassifiedQuestion(text="什么是增值税", intent="definition")
 
@@ -338,7 +279,6 @@ class TestAgentExecutor:
                     },
                 }
 
-        agent_executor = importlib.import_module("tax_agent.runtime.agent_executor")
         executor = agent_executor.AgentExecutor(AgentConfig(), agent=FakeAgent())
         question = ClassifiedQuestion(text="什么是增值税", intent="definition")
 

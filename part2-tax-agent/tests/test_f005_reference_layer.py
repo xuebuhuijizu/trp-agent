@@ -1,12 +1,9 @@
 import json
 
-from tax_agent.business.references._legacy_reference_layer import (
-    Citation,
-    LocalTaxAuthorityProvider,
-    ReferenceManager,
-    find_tax_authorities,
-)
-from tax_agent.business.references.tools import extract_citations_from_messages
+from tax_agent.business.references.manager import ReferenceManager
+from tax_agent.business.references.models import Citation
+from tax_agent.business.references.providers import LocalTaxAuthorityProvider
+from tax_agent.business.references.tools import extract_citations_from_messages, find_tax_authorities
 
 
 def test_local_tax_authority_provider_returns_standard_reference_bundle():
@@ -73,15 +70,3 @@ def test_extract_citations_reads_standard_reference_bundle_messages():
 
     assert citations == payload["citations"]
 
-
-def test_extract_citations_keeps_legacy_sources_payload_compatible():
-    citations = extract_citations_from_messages(
-        [
-            {
-                "name": "retrieve_tax_context",
-                "content": '{"sources": [{"source_id": "vat-regulation", "title": "VAT Regulation"}]}',
-            }
-        ]
-    )
-
-    assert citations == [{"source_id": "vat-regulation", "title": "VAT Regulation"}]

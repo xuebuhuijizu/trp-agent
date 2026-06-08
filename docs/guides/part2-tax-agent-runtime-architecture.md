@@ -52,7 +52,6 @@ part2-tax-agent/
 │  │  ├─ batch.py                  # batch pipeline
 │  │  └─ batch_io/                 # txt/docx 输入与 Markdown/JSON 输出
 │  ├─ domain/ service/ io/         # 旧路径兼容 wrapper
-│  └─ legacy/                      # 历史实验代码，不是主路径
 └─ tests/
 ```
 
@@ -64,7 +63,6 @@ part2-tax-agent/
 | Business Subsystems | `tax_agent/business/` | 业务输出契约、Reference Layer、确定性分析 | HTTP/SSE/CLI 交付 |
 | Runtime Adapters | `tax_agent/runtime/` | 执行器、checkpoint、observability、AG-UI/SSE 投影 | 文件解析、报告输出 |
 | Delivery Surfaces | `tax_agent/delivery/` | FastAPI、CLI batch、batch IO | DeepAgents 装配细节 |
-| Compatibility | `tax_agent/domain/` `service/` `io/` | 旧 import wrapper | 新功能扩展 |
 | Assets | `skills/`, `memories/` | DeepAgents 原生 skills/memory 输入 | Python 控制流 |
 
 ## 运行时架构图

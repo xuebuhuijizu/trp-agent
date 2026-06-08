@@ -95,8 +95,6 @@ app.py
 | `tax_agent/delivery/http_api.py` | FastAPI routes | 是 | 暴露 `/chat`、`/chat/stream`、`/batch`、state/history |
 | `tax_agent/delivery/batch.py` | batch 编排 | 是 | 文件批处理 route / CLI 共用 |
 | `tax_agent/delivery/batch_io/*` | batch 输入输出 | batch 主路径 | txt/docx 解析、Markdown/JSON 报告 |
-| `tax_agent/legacy/*` | 历史实验代码 | 否 | 只保留兼容测试和对照材料 |
-
 注意：`domain/`、`service/`、`io/` 目录已移除（提交 `aa2ef04`），其能力已全部迁至 `business/` 和 `delivery/`。
 
 ## 当前代码阅读顺序
@@ -112,13 +110,13 @@ app.py
 7. `tax_agent/delivery/http_api.py`
 8. `tax_agent/delivery/batch.py`
 
-暂时不要从 `legacy/` 或测试文件开始读；它们不是当前主路径。
+暂时不要从测试文件开始读；测试是行为约束，不是当前主路径。
 
 ## 后续清理原则
 
 - 新增主路径能力时，优先放进 `agent/`、`business/`、`runtime/`、`delivery/` 四个边界。
-- 旧 `InteractionMode` / `response_strategy.py` 属于清理清单，不进入新架构。
-- `retrieve_tax_context` 只作为旧 tool 名兼容，不是新主路径。
+- 旧 `InteractionMode` / `response_strategy.py` 已删除，不进入新架构。
+- 旧 `retrieve_tax_context` tool 名已删除；当前唯一 Reference Layer tool 是 `find_tax_authorities`。
 - 如果一个文件无法回答“谁调用我、为什么存在”，需要补文件头或移动目录。
 
 ## Reference Layer 阅读补充

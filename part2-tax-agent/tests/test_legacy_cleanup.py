@@ -8,6 +8,17 @@ def test_main_no_longer_uses_static_planner():
     assert "Planner()" not in source
 
 
+def test_legacy_package_and_compat_imports_are_removed():
+    root = Path(__file__).resolve().parents[1]
+
+    assert not (root / "tax_agent" / "legacy").exists()
+    assert not (root / "tax_agent" / "config.py").exists()
+    assert not (root / "tax_agent" / "runtime" / "agent_executor.py").exists()
+    assert not (root / "tax_agent" / "runtime" / "ag_ui_protocol.py").exists()
+    assert not (root / "tax_agent" / "runtime" / "sse_protocol.py").exists()
+    assert not (root / "tax_agent" / "runtime" / "response_strategy.py").exists()
+
+
 def test_checkpointing_is_not_mixed_into_local_audit_trace():
     root = Path(__file__).resolve().parents[1]
     audit_trace = (root / "tax_agent" / "runtime" / "audit_trace.py").read_text(encoding="utf-8")
@@ -33,4 +44,4 @@ def test_current_runtime_guide_names_main_paths_and_file_roles():
     assert "`tax_agent/runtime/checkpointing.py`" in guide
     assert "`tax_agent/agent/graph.py`" in guide
     assert "`tax_agent/business/references/`" in guide
-    assert "旧 `InteractionMode` / `response_strategy.py` 属于清理清单" in guide
+    assert "旧 `InteractionMode` / `response_strategy.py` 已删除" in guide
