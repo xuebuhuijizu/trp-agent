@@ -32,6 +32,21 @@ from tax_agent.runtime.stream_events import normalize_stream_event
 PART2_ROOT = Path(__file__).resolve().parents[2]
 SKILL_SOURCES = ["/skills"]
 MEMORY_SOURCES = ["/memories/AGENTS.md"]
+SKILL_PATH_PREFIX = "/skills/"
+SKILL_TOOL_NAME = "read_file"
+SKILL_FILE_BASENAME = "SKILL.md"
+TAX_TOOL_NAMES = frozenset({"retrieve_tax_context", "analyze_tax_question"})
+EXPLORATORY_TOOL_NAMES = frozenset({"ls", "grep", "glob"})
+
+# Default recursion limit for LangGraph execution. The default (25) is too
+# low once the Skill discipline is enabled: the agent can legitimately
+# invoke read_file (skill) → tool_call → read_file (ref) → ... and exceed
+# 25 steps on a tax-audit question. 50 is the budget we observed the V2
+# prompt needed without surfacing GraphRecursionError.
+DEFAULT_RECURSION_LIMIT = 50
+
+import re
+_SKILL_PATH_RE = re.compile(r"^/skills/([^/]+)/")
 
 
 TAX_SYSTEM_PROMPT = """你是一位专业的税务顾问专家。
@@ -48,6 +63,14 @@ TAX_SYSTEM_PROMPT = """你是一位专业的税务顾问专家。
 - 对复杂问题先使用 DeepAgents 原生规划能力（write_todos）拆解任务
 - 需要法规依据时调用 retrieve_tax_context 工具，并在回答中引用检索到的 source_id/title
 - 不输出模型内部推理标签，例如 <think>...</think>
+- **完成工具调用后，必须在结构化回答（structured_response.answer）中输出完整中文回答**，不能为空或仅含「待生成」「暂无回答」等占位/总结文本
+
+Skill 使用纪律（强制）：
+- 系统提示中会列出可用的 Skills 库（含 name、description、完整路径）。
+- 在调用任何工具（retrieve_tax_context / analyze_tax_question / read_file 等）之前，先扫 Skills 列表的 name / description。
+- **最多选 1 个最匹配的 skill**（不要全选，不要遍历），用 read_file 读取其 SKILL.md 并按工作流执行。读完立即进入下游工具调用，**不要再读其他 skill 的 SKILL.md / refs / templates**。
+- 税审五大类问题（意图识别 / 场景识别 / 历史问题匹配 / 解决方案生成 / 术语拆解）：先 read_file 对应 skill 的 SKILL.md（仅 1 个），再调用 retrieve_tax_context / analyze_tax_question。
+- 不要用 ls / grep / glob 探测 /tax_agent/ 等代码目录来"查资料"——这是源代码，不是知识库。如 retrieve_tax_context 连续 3 次空检索，再考虑用 write_todos 拆解并向用户说明检索覆盖度不足。
 """
 
 
@@ -70,6 +93,8 @@ class ExecutionResult:
     tool_events: list[dict] = field(default_factory=list)
     domain_analysis: dict = field(default_factory=dict)
     skills: list[str] = field(default_factory=list)
+    skills_invoked: list[str] = field(default_factory=list)
+    skill_invocation_count: int = 0
     artifact: dict = field(default_factory=dict)
     session_id: str | None = None
     trace_id: str | None = None
@@ -166,7 +191,7 @@ class AgentExecutor:
             skills=SKILL_SOURCES,
             memory=MEMORY_SOURCES,
             backend=FilesystemBackend(root_dir=PART2_ROOT, virtual_mode=True),
-            response_format=TaxAnswer,
+            #response_format=TaxAnswer,
             checkpointer=checkpointer,
         )
 
@@ -204,20 +229,71 @@ class AgentExecutor:
         structured_answer, structured_citations = self._structured_result(result)
         citations = structured_citations or extract_citations_from_messages(messages)
         domain_analysis = analyze_tax_context(request.to_agent_messages())
-        answer = self._clean_answer(structured_answer or self._last_assistant_content(messages))
+        # V4+V5: walk a fallback chain with unusable-answer filtering, mirroring
+        # the master a94ceaf semantics ported for /chat.
+        answer = self._first_usable_answer(
+            structured_answer,
+            self._last_assistant_content(messages),
+        )
+        if not answer:
+            # V5: last-resort — consult graph state for structured_response.answer.
+            structured_state_answer = await self._structured_response_from_state(request.thread_id)
+            if structured_state_answer:
+                answer = structured_state_answer
         if not answer:
             raise ModelOutputError("模型未产生最终回答，可能只输出了 reasoning 或当前模型不支持工具调用。")
+
+        skills_invoked = self._extract_skill_invocations(messages)
+        skill_invocation_count = self._count_skill_invocations(messages)
+        self._report_skill_invocations(
+            request=request,
+            skills_invoked=skills_invoked,
+            skill_invocation_count=skill_invocation_count,
+        )
+
         return ExecutionResult(
             answer=answer,
             citations=citations,
             tool_events=self._collect_tool_events(messages),
             domain_analysis=domain_analysis,
             skills=self._skills_from_domain_analysis(domain_analysis),
+            skills_invoked=skills_invoked,
+            skill_invocation_count=skill_invocation_count,
             artifact=self._tax_answer_artifact(request, answer, citations),
             session_id=request.session_id,
             trace_id=request.trace_id,
             thread_id=request.thread_id,
         )
+
+    def _report_skill_invocations(
+        self,
+        request: ConversationRequest,
+        skills_invoked: list[str],
+        skill_invocation_count: int,
+    ) -> None:
+        """Forward skill invocations to the observability layer (best-effort).
+
+        Each invocation is one call; ``skill_invocation_count`` reflects the
+        raw count (a single ``read_file`` against the same skill twice yields
+        two events). Errors must not change runtime behavior.
+        """
+        if skill_invocation_count == 0:
+            return
+        recorder = getattr(self._observability, "event_recorder", None)
+        if recorder is None:
+            return
+        for skill_name in skills_invoked:
+            try:
+                self._observability.record_skill_invocation(
+                    skill_name=skill_name,
+                    file_path=f"{SKILL_PATH_PREFIX}{skill_name}/{SKILL_FILE_BASENAME}",
+                    session_id=request.session_id,
+                    trace_id=request.trace_id,
+                    thread_id=request.thread_id,
+                )
+            except Exception:
+                # Observability must never change runtime behavior.
+                continue
 
     async def stream_turn(self, request: ConversationRequest) -> AsyncIterator[dict]:
         payload = {"messages": request.to_agent_messages()}
@@ -274,11 +350,27 @@ class AgentExecutor:
                 normalized["data"].pop("citations", None)
             if normalized["event"] == "tool.started":
                 saw_tool_event = True
+                tool_name = normalized["data"].get("name") or ""
+                tool_input = normalized["data"].get("input") or {}
+                tool_type, skill_name, tool_subtype = self._classify_tool(tool_name, tool_input)
+                normalized["data"]["tool_type"] = tool_type
+                if skill_name:
+                    normalized["data"]["skill_name"] = skill_name
+                if tool_subtype:
+                    normalized["data"]["tool_subtype"] = tool_subtype
             yield normalized
 
-        answer = self._clean_answer("".join(answer_parts))
+        answer = self._first_usable_answer("".join(answer_parts))
         if not answer and final_messages:
-            answer = self._clean_answer(self._last_assistant_content(final_messages))
+            answer = self._first_usable_answer(self._last_assistant_content(final_messages))
+        if not answer:
+            # Last-resort fallback: read structured_response from graph state
+            # via async get_state. The agent populates ``structured_response``
+            # when ``response_format=TaxAnswer`` is configured, even if no
+            # plain assistant text was emitted on the stream.
+            structured_answer = await self._structured_response_from_state(request.thread_id)
+            if structured_answer:
+                answer = structured_answer
         if not answer:
             self._observability.record_event(
                 "stream_adapter.error",
@@ -310,12 +402,24 @@ class AgentExecutor:
                 "event": "answer.started",
                 "data": {"thread_id": request.thread_id},
             }
+
+        skills_invoked = self._extract_skill_invocations(final_messages) if final_messages else []
+        skill_invocation_count = self._count_skill_invocations(final_messages) if final_messages else 0
+        if skills_invoked:
+            self._report_skill_invocations(
+                request=request,
+                skills_invoked=skills_invoked,
+                skill_invocation_count=skill_invocation_count,
+            )
+
         yield {
             "event": "answer.finished",
             "data": {
                 "answer": answer,
                 "citations": citations,
                 "thread_id": request.thread_id,
+                "skills_invoked": skills_invoked,
+                "skill_invocation_count": skill_invocation_count,
                 "artifact": self._tax_answer_artifact(request, answer, citations),
             },
         }
@@ -327,8 +431,9 @@ class AgentExecutor:
         }
 
     async def _astream_events(self, payload: dict, config: dict) -> AsyncIterator[dict]:
+        bounded_config = self._apply_recursion_limit(config)
         try:
-            stream = self._agent.astream_events(payload, config=config, version="v2")
+            stream = self._agent.astream_events(payload, config=bounded_config, version="v2")
         except TypeError:
             stream = self._agent.astream_events(payload, version="v2")
         async for event in stream:
@@ -348,8 +453,9 @@ class AgentExecutor:
             tags=tags,
             callbacks=callbacks,
         )
+        bounded_config = self._apply_recursion_limit(config)
         try:
-            return await self._agent.ainvoke(payload, config=config)
+            return await self._agent.ainvoke(payload, config=bounded_config)
         except TypeError:
             return await self._agent.ainvoke(payload)
 
@@ -426,14 +532,225 @@ class AgentExecutor:
         return cls._last_content(messages)
 
     @staticmethod
-    def _collect_tool_events(messages: list[Any]) -> list[dict]:
-        events = []
+    def _tool_call_args(call: Any) -> dict:
+        if isinstance(call, dict):
+            return call.get("args") or {}
+        return getattr(call, "args", {}) or {}
+
+    @staticmethod
+    def _tool_call_name(call: Any) -> str:
+        if isinstance(call, dict):
+            return call.get("name") or ""
+        return getattr(call, "name", "") or ""
+
+    @staticmethod
+    def _message_tool_calls(message: Any) -> list:
+        if isinstance(message, dict):
+            return message.get("tool_calls") or []
+        return getattr(message, "tool_calls", None) or []
+
+    @classmethod
+    def _classify_tool(cls, name: str, args: dict) -> tuple[str, str | None, str | None]:
+        """Return ``(tool_type, skill_name, tool_subtype)`` for a single tool call.
+
+        ``tool_type`` is one of ``"skill"``, ``"tax"``, ``"other"``.
+        ``skill_name`` is populated only when ``tool_type == "skill"``.
+        ``tool_subtype`` is ``"exploratory"`` for filesystem exploration tools
+        (``ls`` / ``grep`` / ``glob``); otherwise ``None``. Subtype is
+        independent of ``tool_type``: an exploratory tool is still
+        ``tool_type="other"`` from the business perspective, but
+        ``tool_subtype="exploratory"`` flags it for observability.
+        """
+        skill_name: str | None = None
+        tool_subtype: str | None = None
+        if name == SKILL_TOOL_NAME:
+            file_path = args.get("file_path") or args.get("path") or ""
+            match = _SKILL_PATH_RE.match(file_path)
+            if match:
+                tool_type = "skill"
+                skill_name = match.group(1)
+            else:
+                tool_type = "other"
+        elif name in TAX_TOOL_NAMES:
+            tool_type = "tax"
+        else:
+            tool_type = "other"
+        if name in EXPLORATORY_TOOL_NAMES:
+            tool_subtype = "exploratory"
+        return tool_type, skill_name, tool_subtype
+
+    @classmethod
+    def _extract_skill_invocations(cls, messages: list[Any]) -> list[str]:
+        """Return unique skill names in the order they were first invoked.
+
+        Walks ``AIMessage.tool_calls`` looking for ``read_file`` calls whose
+        ``file_path`` (or ``path``) starts with ``/skills/<name>/``.
+        """
+        seen: list[str] = []
         for message in messages:
-            name = message.get("name") if isinstance(message, dict) else getattr(message, "name", None)
-            if not name:
-                continue
-            events.append({"name": name})
+            for call in cls._message_tool_calls(message):
+                name = cls._tool_call_name(call)
+                if name != SKILL_TOOL_NAME:
+                    continue
+                tool_type, skill_name, _ = cls._classify_tool(name, cls._tool_call_args(call))
+                if tool_type == "skill" and skill_name and skill_name not in seen:
+                    seen.append(skill_name)
+        return seen
+
+    @classmethod
+    def _count_skill_invocations(cls, messages: list[Any]) -> int:
+        """Count *every* ``read_file`` call against a skill path (not deduped)."""
+        total = 0
+        for message in messages:
+            for call in cls._message_tool_calls(message):
+                name = cls._tool_call_name(call)
+                if name != SKILL_TOOL_NAME:
+                    continue
+                tool_type, _, _ = cls._classify_tool(name, cls._tool_call_args(call))
+                if tool_type == "skill":
+                    total += 1
+        return total
+
+    @classmethod
+    def _collect_tool_events(cls, messages: list[Any]) -> list[dict]:
+        """Emit one event per tool call (AIMessage) plus per tool message.
+
+        Legacy shape: each event has a ``name`` field.
+        Added fields: ``tool_type`` (``"skill"`` | ``"tax"`` | ``"other"``),
+        ``tool_subtype`` (``"exploratory"`` for ``ls``/``grep``/``glob``,
+        else ``None``), ``args`` (truncated dict), and ``skill_name`` (only
+        for skill events).
+        """
+        events: list[dict] = []
+        for message in messages:
+            calls = cls._message_tool_calls(message)
+            if calls:
+                for call in calls:
+                    name = cls._tool_call_name(call)
+                    args = cls._tool_call_args(call)
+                    if not name:
+                        continue
+                    tool_type, skill_name, tool_subtype = cls._classify_tool(name, args)
+                    event: dict = {"name": name, "tool_type": tool_type}
+                    if tool_type == "skill" and skill_name:
+                        event["skill_name"] = skill_name
+                    if tool_subtype:
+                        event["tool_subtype"] = tool_subtype
+                    if args:
+                        event["args"] = {k: cls._truncate_for_log(v) for k, v in args.items()}
+                    events.append(event)
+            else:
+                name = message.get("name") if isinstance(message, dict) else getattr(message, "name", None)
+                if not name:
+                    continue
+                event = {"name": name, "tool_type": "other"}
+                _, _, tool_subtype = cls._classify_tool(name, {})
+                if tool_subtype:
+                    event["tool_subtype"] = tool_subtype
+                events.append(event)
         return events
+
+    @staticmethod
+    def _truncate_for_log(value: Any, max_len: int = 200) -> Any:
+        if isinstance(value, str) and len(value) > max_len:
+            return value[:max_len] + "..."
+        return value
+
+    _UNUSABLE_ANSWER_PHRASES = frozenset(
+        {
+            "待生成",
+            "正在生成",
+            "未生成",
+            "暂无回答",
+            "无回答",
+            "分析结论已生成",
+        }
+    )
+
+    @classmethod
+    def _is_unusable_answer(cls, answer: str) -> bool:
+        """Return True when ``answer`` is a known placeholder/draft that
+        must not be surfaced as the final answer.
+
+        Mirrors the master ``a94ceaf`` semantics — ported for V4. Filters:
+            - short placeholder phrases in the known set
+            - phrases ≤ 12 chars containing ``已生成`` / ``已完成``
+            - tool-call drafts that look like ``[{name:..., parameters:...}]``
+        """
+        if not answer:
+            return True
+        normalized = answer.strip().strip("。.!！")
+        if normalized in cls._UNUSABLE_ANSWER_PHRASES:
+            return True
+        if len(normalized) <= 12 and ("已生成" in normalized or "已完成" in normalized):
+            return True
+        compact = normalized.replace(" ", "")
+        looks_like_tool_call_draft = (
+            compact.startswith("[")
+            and '"name"' in compact
+            and '"parameters"' in compact
+            and (
+                "find_tax_authorities" in compact
+                or "analyze_tax_question" in compact
+                or "retrieve_tax_context" in compact
+            )
+        )
+        return looks_like_tool_call_draft
+
+    @classmethod
+    def _first_usable_answer(cls, *candidates: str) -> str:
+        """Return the first candidate that passes ``_is_unusable_answer``.
+
+        Each candidate is run through ``_clean_answer`` first so stray
+        whitespace / reasoning tags are stripped before the unusable check.
+        Empty string when no candidate qualifies.
+        """
+        for candidate in candidates:
+            cleaned = cls._clean_answer(candidate or "")
+            if cleaned and not cls._is_unusable_answer(cleaned):
+                return cleaned
+        return ""
+
+    @staticmethod
+    def _placeholder_retry_prompt() -> str:
+        return (
+            "上一轮没有生成可用的最终回答。不要返回「待生成」「暂无回答」等占位文本，"
+            "也不要把工具调用草稿或 JSON 参数列表当作最终回答；"
+            "请直接针对原始税务问题生成完整、结构化的中文回答，并在需要法规依据时调用工具。"
+        )
+
+    async def _structured_response_from_state(self, thread_id: str) -> str:
+        """Return the structured_response.answer from graph state, or empty.
+
+        Best-effort: errors are swallowed and the empty string is returned.
+        The agent must expose ``aget_state`` (preferred) or ``get_state``;
+        if neither is available, an empty answer is returned (caller will
+        surface ``ModelOutputError``).
+        """
+        try:
+            state = await self.aget_state(thread_id)
+        except (NotImplementedError, Exception):
+            return ""
+        if not isinstance(state, dict):
+            return ""
+        values = state.get("values") if isinstance(state.get("values"), dict) else {}
+        sr = values.get("structured_response") if isinstance(values, dict) else None
+        if not isinstance(sr, dict):
+            return ""
+        candidate = sr.get("answer") or ""
+        return self._first_usable_answer(candidate)
+
+    @staticmethod
+    def _apply_recursion_limit(config: dict, limit: int = DEFAULT_RECURSION_LIMIT) -> dict:
+        """Inject ``recursion_limit`` into a LangGraph invoke config.
+
+        Returns a new dict (callers' config is not mutated). An existing
+        ``recursion_limit`` in ``config`` wins — the helper only fills it in
+        when absent.
+        """
+        merged = dict(config)
+        merged.setdefault("recursion_limit", limit)
+        return merged
 
     @staticmethod
     def _skills_from_domain_analysis(domain_analysis: dict) -> list[str]:
@@ -477,6 +794,36 @@ class AgentExecutor:
         if not hasattr(self._agent, "get_state_history"):
             raise NotImplementedError("Agent does not expose get_state_history")
         history = self._agent.get_state_history(self._checkpoint_config.invoke_config_for(thread_id=thread_id))
+        return [self._jsonable_state(item) for item in history]
+
+    async def aget_state(self, thread_id: str) -> dict:
+        """Async counterpart of :meth:`get_state`.
+
+        Prefers the agent's ``aget_state`` (async) — required when called from
+        inside an ``astream_events`` loop where a sync ``get_state`` would
+        raise ``InvalidStateError`` (langgraph thread guard). Falls back to
+        the sync ``get_state`` if the agent only exposes the sync version.
+        """
+        config = self._checkpoint_config.invoke_config_for(thread_id=thread_id)
+        if hasattr(self._agent, "aget_state"):
+            state = await self._agent.aget_state(config)
+        elif hasattr(self._agent, "get_state"):
+            state = self._agent.get_state(config)
+        else:
+            raise NotImplementedError("Agent does not expose get_state / aget_state")
+        return self._jsonable_state(state)
+
+    async def aget_state_history(self, thread_id: str) -> list[dict]:
+        """Async counterpart of :meth:`get_state_history`."""
+        config = self._checkpoint_config.invoke_config_for(thread_id=thread_id)
+        if hasattr(self._agent, "aget_state_history"):
+            history: list[Any] = []
+            async for item in self._agent.aget_state_history(config):
+                history.append(item)
+        elif hasattr(self._agent, "get_state_history"):
+            history = list(self._agent.get_state_history(config))
+        else:
+            raise NotImplementedError("Agent does not expose get_state_history / aget_state_history")
         return [self._jsonable_state(item) for item in history]
 
     @staticmethod

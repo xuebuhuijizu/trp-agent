@@ -175,7 +175,7 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
         {"event": "answer.delta", "data": {"text": "world"}},
         {
             "event": "tool.started",
-            "data": {"name": "retrieve_tax_context", "input": {"query": "vat"}},
+            "data": {"name": "retrieve_tax_context", "input": {"query": "vat"}, "tool_type": "tax"},
         },
         {
             "event": "tool.finished",
@@ -190,6 +190,8 @@ async def test_execute_stream_turn_maps_astream_events_to_stable_events():
                 "answer": "hello world",
                 "citations": [{"source_id": "vat-regulation", "title": "VAT"}],
                 "thread_id": "thread-stream",
+                "skills_invoked": [],
+                "skill_invocation_count": 0,
                 "artifact": {
                     "kind": "TaxAnswer",
                     "data": {
